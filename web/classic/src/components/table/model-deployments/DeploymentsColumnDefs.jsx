@@ -54,7 +54,7 @@ const STATUS_TAG_CONFIG = {
   deploying: {
     color: 'blue',
     labelKey: '部署中',
-    icon: <FaSpinner size={12} className='text-blue-600' />,
+    icon: <FaSpinner size={12} className='text-orange-600' />,
   },
   pending: {
     color: 'orange',
@@ -89,7 +89,7 @@ const STATUS_TAG_CONFIG = {
   'deployment requested': {
     color: 'blue',
     labelKey: '部署请求中',
-    icon: <FaSpinner size={12} className='text-blue-600' />,
+    icon: <FaSpinner size={12} className='text-orange-600' />,
   },
   'termination requested': {
     color: 'orange',
@@ -215,7 +215,7 @@ const ContainerNameCell = ({ text, record, t }) => {
       <Typography.Text
         type='secondary'
         size='small'
-        className='text-xs cursor-pointer hover:text-blue-600 transition-colors select-all'
+        className='text-xs cursor-pointer hover:text-orange-600 transition-colors select-all'
         onClick={handleCopyId}
         title={t('点击复制ID')}
       >
@@ -235,7 +235,7 @@ const renderResourceConfig = (resource, t) => {
     <div className='flex flex-col gap-1'>
       {cpu && (
         <div className='flex items-center gap-1 text-xs'>
-          <FaMicrochip className='text-blue-500' />
+          <FaMicrochip className='text-orange-500' />
           <span>CPU: {cpu}</span>
         </div>
       )}

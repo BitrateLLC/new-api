@@ -18,10 +18,9 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 // ========== UI 配置常量 ==========
-export const CHART_CONFIG = { mode: 'desktop-browser' };
+export const CHART_CONFIG = { mode: 'desktop-browser', background: 'transparent' };
 
 export const CARD_PROPS = {
-  shadows: '',
   bordered: true,
   headerLine: true,
 };
@@ -72,12 +71,12 @@ export const DEFAULT_CHART_SPECS = {
       state: {
         hover: {
           outerRadius: 0.85,
-          stroke: '#000',
+          stroke: '#e8723a',
           lineWidth: 1,
         },
         selected: {
           outerRadius: 0.85,
-          stroke: '#000',
+          stroke: '#e8723a',
           lineWidth: 1,
         },
       },
@@ -101,7 +100,7 @@ export const DEFAULT_CHART_SPECS = {
     bar: {
       state: {
         hover: {
-          stroke: '#000',
+          stroke: '#e8723a',
           lineWidth: 1,
         },
       },

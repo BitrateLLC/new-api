@@ -40,7 +40,6 @@ const CustomRequestEditor = ({
   const [errorMessage, setErrorMessage] = useState('');
   const [localValue, setLocalValue] = useState(customRequestBody || '');
 
-  // 当切换到自定义模式时，用默认payload初始化
   useEffect(() => {
     if (
       customRequestMode &&
@@ -59,7 +58,6 @@ const CustomRequestEditor = ({
     onCustomRequestBodyChange,
   ]);
 
-  // 同步外部传入的customRequestBody到本地状态
   useEffect(() => {
     if (customRequestBody !== localValue) {
       setLocalValue(customRequestBody || '');
@@ -67,7 +65,6 @@ const CustomRequestEditor = ({
     }
   }, [customRequestBody]);
 
-  // 验证JSON格式
   const validateJson = (value) => {
     if (!value.trim()) {
       setIsValid(true);
@@ -90,7 +87,6 @@ const CustomRequestEditor = ({
   const handleValueChange = (value) => {
     setLocalValue(value);
     validateJson(value);
-    // 始终保存用户输入，让预览逻辑处理JSON解析错误
     onCustomRequestBodyChange(value);
   };
 
@@ -121,8 +117,8 @@ const CustomRequestEditor = ({
       {/* 自定义模式开关 */}
       <div className='flex items-center justify-between'>
         <div className='flex items-center gap-2'>
-          <Code size={16} className='text-gray-500' />
-          <Typography.Text strong className='text-sm'>
+          <Code size={16} style={{ color: 'var(--hp-sub)' }} />
+          <Typography.Text strong style={{ fontSize: '14px', color: 'var(--hp-text)' }}>
             {t('自定义请求体模式')}
           </Typography.Text>
         </div>
@@ -144,28 +140,28 @@ const CustomRequestEditor = ({
               '启用此模式后，将使用您自定义的请求体发送API请求，模型配置面板的参数设置将被忽略。',
             )}
             icon={<AlertTriangle size={16} />}
-            className='!rounded-lg'
+            style={{ borderRadius: '12px' }}
             closeIcon={null}
           />
 
           {/* JSON编辑器 */}
           <div>
             <div className='flex items-center justify-between mb-2'>
-              <Typography.Text strong className='text-sm'>
+              <Typography.Text strong style={{ fontSize: '14px', color: 'var(--hp-text)' }}>
                 {t('请求体 JSON')}
               </Typography.Text>
               <div className='flex items-center gap-2'>
                 {isValid ? (
-                  <div className='flex items-center gap-1 text-green-600'>
+                  <div className='flex items-center gap-1' style={{ color: 'var(--semi-color-success)' }}>
                     <Check size={14} />
-                    <Typography.Text className='text-xs'>
+                    <Typography.Text style={{ fontSize: '12px', color: 'var(--semi-color-success)' }}>
                       {t('格式正确')}
                     </Typography.Text>
                   </div>
                 ) : (
-                  <div className='flex items-center gap-1 text-red-600'>
+                  <div className='flex items-center gap-1' style={{ color: 'var(--semi-color-danger)' }}>
                     <X size={14} />
-                    <Typography.Text className='text-xs'>
+                    <Typography.Text style={{ fontSize: '12px', color: 'var(--semi-color-danger)' }}>
                       {t('格式错误')}
                     </Typography.Text>
                   </div>
@@ -177,7 +173,7 @@ const CustomRequestEditor = ({
                   icon={<Edit size={14} />}
                   onClick={formatJson}
                   disabled={!isValid}
-                  className='!rounded-lg'
+                  style={{ borderRadius: '12px', transition: 'all 0.2s ease' }}
                 >
                   {t('格式化')}
                 </Button>
@@ -189,20 +185,22 @@ const CustomRequestEditor = ({
               onChange={handleValueChange}
               placeholder='{"model": "gpt-4o", "messages": [...], ...}'
               autosize={{ minRows: 8, maxRows: 20 }}
-              className={`custom-request-textarea !rounded-lg font-mono text-sm ${!isValid ? '!border-red-500' : ''}`}
               style={{
                 fontFamily: 'Consolas, Monaco, "Courier New", monospace',
                 lineHeight: '1.5',
+                borderRadius: '12px',
+                borderColor: !isValid ? 'var(--semi-color-danger)' : undefined,
+                fontSize: '13px',
               }}
             />
 
             {!isValid && errorMessage && (
-              <Typography.Text type='danger' className='text-xs mt-1 block'>
+              <Typography.Text type='danger' style={{ fontSize: '12px', marginTop: '4px', display: 'block' }}>
                 {errorMessage}
               </Typography.Text>
             )}
 
-            <Typography.Text className='text-xs text-gray-500 mt-2 block'>
+            <Typography.Text style={{ fontSize: '12px', color: 'var(--hp-sub)', marginTop: '8px', display: 'block' }}>
               {t(
                 '请输入有效的JSON格式的请求体。您可以参考预览面板中的默认请求体格式。',
               )}
@@ -215,3 +213,4 @@ const CustomRequestEditor = ({
 };
 
 export default CustomRequestEditor;
+;

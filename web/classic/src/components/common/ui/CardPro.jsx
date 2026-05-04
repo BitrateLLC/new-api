@@ -165,7 +165,13 @@ const CardPro = ({
       footer={footerContent}
       shadows={shadows}
       bordered={bordered}
-      style={style}
+      style={{
+        borderRadius: '16px',
+        boxShadow: 'var(--hp-shadow)',
+        border: '1px solid var(--hp-border)',
+        transition: 'box-shadow 0.2s ease, border-color 0.2s ease',
+        ...style,
+      }}
       {...props}
     >
       {children}

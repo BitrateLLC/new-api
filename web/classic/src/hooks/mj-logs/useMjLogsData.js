@@ -231,12 +231,17 @@ export const useMjLogsData = () => {
     const url = isAdminUser
       ? `/api/mj/?p=${page}&page_size=${size}&channel_id=${channel_id}&mj_id=${mj_id}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}`
       : `/api/mj/self/?p=${page}&page_size=${size}&mj_id=${mj_id}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}`;
-    const res = await API.get(url);
-    const { success, message, data } = res.data;
-    if (success) {
-      syncPageData(data);
-    } else {
-      showError(message);
+    try {
+      const res = await API.get(url);
+      const { success, message, data } = res.data;
+      if (success) {
+        syncPageData(data);
+      } else {
+        showError(message);
+      }
+    } catch (error) {
+      console.error('Failed to load MJ logs:', error);
+      showError(error.message || 'Failed to load MJ logs');
     }
     setLoading(false);
   };

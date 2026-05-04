@@ -35,9 +35,17 @@ const TransferModal = ({
   return (
     <Modal
       title={
-        <div className='flex items-center'>
-          <CreditCard className='mr-2' size={18} />
-          {t('划转邀请额度')}
+        <div className='flex items-center gap-2'>
+          <div
+            style={{
+              width: 28, height: 28, borderRadius: 8,
+              background: 'rgba(var(--hp-accent-rgb), 0.12)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <CreditCard size={14} style={{ color: 'var(--hp-accent)' }} />
+          </div>
+          <span style={{ color: 'var(--hp-text)', fontWeight: 600 }}>{t('划转邀请额度')}</span>
         </div>
       }
       visible={openTransfer}
@@ -45,28 +53,43 @@ const TransferModal = ({
       onCancel={handleTransferCancel}
       maskClosable={false}
       centered
+      okButtonProps={{
+        style: {
+          background: 'var(--hp-accent)',
+          borderColor: 'var(--hp-accent)',
+          borderRadius: 10,
+        },
+      }}
+      cancelButtonProps={{ style: { borderRadius: 10 } }}
     >
-      <div className='space-y-4'>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 4 }}>
         <div>
-          <Typography.Text strong className='block mb-2'>
+          <Typography.Text
+            style={{ color: 'var(--hp-sub)', fontSize: 12, display: 'block', marginBottom: 8 }}
+          >
             {t('可用邀请额度')}
           </Typography.Text>
           <Input
             value={renderQuota(userState?.user?.aff_quota)}
             disabled
-            className='!rounded-lg'
+            style={{ borderRadius: 10 }}
           />
         </div>
         <div>
-          <Typography.Text strong className='block mb-2'>
-            {t('划转额度')} · {t('最低') + renderQuota(getQuotaPerUnit())}
+          <Typography.Text
+            style={{ color: 'var(--hp-sub)', fontSize: 12, display: 'block', marginBottom: 8 }}
+          >
+            {t('划转额度')}
+            <span style={{ color: 'var(--hp-muted)', marginLeft: 6 }}>
+              · {t('最低')}{renderQuota(getQuotaPerUnit())}
+            </span>
           </Typography.Text>
           <InputNumber
             min={getQuotaPerUnit()}
             max={userState?.user?.aff_quota || 0}
             value={transferAmount}
             onChange={(value) => setTransferAmount(value)}
-            className='w-full !rounded-lg'
+            style={{ width: '100%', borderRadius: 10 }}
           />
         </div>
       </div>

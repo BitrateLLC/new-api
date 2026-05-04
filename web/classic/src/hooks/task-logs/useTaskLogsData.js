@@ -235,12 +235,17 @@ export const useTaskLogsData = () => {
     let url = isAdminUser
       ? `/api/task/?p=${page}&page_size=${size}&channel_id=${channel_id}&task_id=${task_id}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}`
       : `/api/task/self?p=${page}&page_size=${size}&task_id=${task_id}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}`;
-    const res = await API.get(url);
-    const { success, message, data } = res.data;
-    if (success) {
-      syncPageData(data);
-    } else {
-      showError(message);
+    try {
+      const res = await API.get(url);
+      const { success, message, data } = res.data;
+      if (success) {
+        syncPageData(data);
+      } else {
+        showError(message);
+      }
+    } catch (error) {
+      console.error('Failed to load task logs:', error);
+      showError(error.message || 'Failed to load task logs');
     }
     setLoading(false);
   };
@@ -291,13 +296,18 @@ export const useTaskLogsData = () => {
     if (!isAdminUser) {
       return;
     }
-    const res = await API.get(`/api/user/${userId}`);
-    const { success, message, data } = res.data;
-    if (success) {
-      setUserInfoData(data);
-      setShowUserInfoModal(true);
-    } else {
-      showError(message);
+    try {
+      const res = await API.get(`/api/user/${userId}`);
+      const { success, message, data } = res.data;
+      if (success) {
+        setUserInfoData(data);
+        setShowUserInfoModal(true);
+      } else {
+        showError(message);
+      }
+    } catch (error) {
+      console.error('Failed to get user info:', error);
+      showError(error.message || 'Failed to get user info');
     }
   };
 

@@ -18,10 +18,12 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React from 'react';
-import { Card, Avatar, Skeleton, Tag } from '@douyinfe/semi-ui';
+import { Card, Skeleton, Tag } from '@douyinfe/semi-ui';
 import { VChart } from '@visactor/react-vchart';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+
+const CARD_VARIANT = ['db-stats-card-1', 'db-stats-card-2', 'db-stats-card-3', 'db-stats-card-4'];
 
 const StatsCards = ({
   groupedStatsData,
@@ -33,33 +35,29 @@ const StatsCards = ({
   const navigate = useNavigate();
   const { t } = useTranslation();
   return (
-    <div className='mb-4'>
-      <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'>
+    <div className='db-section'>
+      <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5'>
         {groupedStatsData.map((group, idx) => (
           <Card
             key={idx}
             {...CARD_PROPS}
-            className={`${group.color} border-0 !rounded-2xl w-full`}
+            className={`db-stats-card ${CARD_VARIANT[idx % 4]}`}
             title={group.title}
           >
             <div className='space-y-4'>
               {group.items.map((item, itemIdx) => (
                 <div
                   key={itemIdx}
-                  className='flex items-center justify-between cursor-pointer'
+                  className='db-stat-item'
                   onClick={item.onClick}
                 >
                   <div className='flex items-center'>
-                    <Avatar
-                      className='mr-3'
-                      size='small'
-                      color={item.avatarColor}
-                    >
+                    <div className='db-stat-icon-wrap mr-3'>
                       {item.icon}
-                    </Avatar>
+                    </div>
                     <div>
-                      <div className='text-xs text-gray-500'>{item.title}</div>
-                      <div className='text-lg font-semibold'>
+                      <div className='db-stat-label'>{item.title}</div>
+                      <div className='db-stat-value'>
                         <Skeleton
                           loading={loading}
                           active
@@ -69,8 +67,10 @@ const StatsCards = ({
                               rows={1}
                               style={{
                                 width: '65px',
-                                height: '24px',
+                                height: '28px',
                                 marginTop: '4px',
+                                borderRadius: '8px',
+                                background: 'rgba(var(--hp-accent-rgb), 0.08)',
                               }}
                             />
                           }
@@ -89,6 +89,7 @@ const StatsCards = ({
                         e.stopPropagation();
                         navigate('/console/topup');
                       }}
+                      className='db-topup-tag'
                     >
                       {t('充值')}
                     </Tag>

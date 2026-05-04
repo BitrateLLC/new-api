@@ -43,7 +43,6 @@ const ModelSelectModal = ({
   models = [],
   selected = [],
   redirectModels = [],
-  redirectSourceModels = [],
   onConfirm,
   onCancel,
 }) => {
@@ -55,14 +54,6 @@ const ModelSelectModal = ({
     if (typeof model === 'object' && model.model_name) return model.model_name;
     return String(model ?? '');
   };
-  const normalizeModelList = (modelList = []) =>
-    Array.from(
-      new Set(
-        (modelList || [])
-          .map((model) => getModelName(model).trim())
-          .filter(Boolean),
-      ),
-    );
 
   const normalizedSelected = useMemo(
     () => (selected || []).map(getModelName),
@@ -86,10 +77,6 @@ const ModelSelectModal = ({
         ),
       ),
     [redirectModels],
-  );
-  const normalizedRedirectSourceSet = useMemo(
-    () => new Set(normalizeModelList(redirectSourceModels)),
-    [redirectSourceModels],
   );
   const normalizedSelectedSet = useMemo(() => {
     const set = new Set();
@@ -129,16 +116,6 @@ const ModelSelectModal = ({
   const existingModels = filteredModels.filter((model) =>
     isExistingModel(model),
   );
-  const fetchedModelSet = useMemo(
-    () => new Set(normalizeModelList(models)),
-    [models],
-  );
-  const removedModels = normalizeModelList(selected).filter(
-    (model) =>
-      !fetchedModelSet.has(model) &&
-      !normalizedRedirectSourceSet.has(model) &&
-      model.toLowerCase().includes(keyword.toLowerCase()),
-  );
 
   // 同步外部选中值
   useEffect(() => {
@@ -150,15 +127,11 @@ const ModelSelectModal = ({
   // 当模型列表变化时，设置默认tab
   useEffect(() => {
     if (visible) {
-      if (newModels.length > 0) {
-        setActiveTab('new');
-      } else if (removedModels.length > 0) {
-        setActiveTab('removed');
-      } else {
-        setActiveTab('existing');
-      }
+      // 默认显示新获取模型tab，如果没有新模型则显示已有模型
+      const hasNewModels = newModels.length > 0;
+      setActiveTab(hasNewModels ? 'new' : 'existing');
     }
-  }, [visible, newModels.length, removedModels.length, selected]);
+  }, [visible, newModels.length, selected]);
 
   const handleOk = () => {
     onConfirm && onConfirm(checkedList);
@@ -221,14 +194,6 @@ const ModelSelectModal = ({
           {
             tab: `${t('已有的模型')} (${existingModels.length})`,
             itemKey: 'existing',
-          },
-        ]
-      : []),
-    ...(removedModels.length > 0
-      ? [
-          {
-            tab: `${t('上游已删除的模型')} (${removedModels.length})`,
-            itemKey: 'removed',
           },
         ]
       : []),
@@ -378,11 +343,9 @@ const ModelSelectModal = ({
         showClear
       />
 
-      <Spin
-        spinning={!models || (models.length === 0 && removedModels.length === 0)}
-      >
+      <Spin spinning={!models || models.length === 0}>
         <div style={{ maxHeight: 400, overflowY: 'auto', paddingRight: 8 }}>
-          {filteredModels.length === 0 && removedModels.length === 0 ? (
+          {filteredModels.length === 0 ? (
             <Empty
               image={
                 <IllustrationNoResult style={{ width: 150, height: 150 }} />
@@ -406,14 +369,6 @@ const ModelSelectModal = ({
                   {renderModelsByCategory(existingModelsByCategory, 'existing')}
                 </div>
               )}
-              {activeTab === 'removed' && removedModels.length > 0 && (
-                <div>
-                  {renderModelsByCategory(
-                    categorizeModels(removedModels),
-                    'removed',
-                  )}
-                </div>
-              )}
             </Checkbox.Group>
           )}
         </div>
@@ -427,11 +382,7 @@ const ModelSelectModal = ({
         <div className='flex items-center justify-end gap-2'>
           {(() => {
             const currentModels =
-              activeTab === 'new'
-                ? newModels
-                : activeTab === 'removed'
-                  ? removedModels
-                  : existingModels;
+              activeTab === 'new' ? newModels : existingModels;
             const currentSelected = currentModels.filter((model) =>
               checkedList.includes(model),
             ).length;

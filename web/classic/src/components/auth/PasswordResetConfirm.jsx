@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   API,
   copy,
@@ -26,6 +26,7 @@ import {
   getLogo,
   getSystemName,
 } from '../../helpers';
+import { useActualTheme } from '../../context/Theme';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Button, Card, Form, Typography, Banner } from '@douyinfe/semi-ui';
 import { IconMail, IconLock, IconCopy } from '@douyinfe/semi-icons';
@@ -49,7 +50,8 @@ const PasswordResetConfirm = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [formApi, setFormApi] = useState(null);
 
-  const logo = getLogo();
+  const actualTheme = useActualTheme();
+  const logo = useMemo(() => getLogo(), [actualTheme]);
   const systemName = getSystemName();
 
   useEffect(() => {
@@ -87,20 +89,25 @@ const PasswordResetConfirm = () => {
     }
     setDisableButton(true);
     setLoading(true);
-    const res = await API.post(`/api/user/reset`, {
-      email,
-      token,
-    });
-    const { success, message } = res.data;
-    if (success) {
-      let password = res.data.data;
-      setNewPassword(password);
-      await copy(password);
-      showNotice(`${t('密码已重置并已复制到剪贴板：')} ${password}`);
-    } else {
-      showError(message);
+    try {
+      const res = await API.post(`/api/user/reset`, {
+        email,
+        token,
+      });
+      const { success, message } = res.data;
+      if (success) {
+        let password = res.data.data;
+        setNewPassword(password);
+        await copy(password);
+        showNotice(`${t('密码已重置并已复制到剪贴板：')} ${password}`);
+      } else {
+        showError(message);
+      }
+    } catch (err) {
+      console.error('Failed to reset password:', err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   return (
@@ -202,7 +209,7 @@ const PasswordResetConfirm = () => {
                   <Text>
                     <Link
                       to='/login'
-                      className='text-blue-600 hover:text-blue-800 font-medium'
+                      className='text-orange-600 hover:text-orange-800 font-medium'
                     >
                       {t('返回登录')}
                     </Link>

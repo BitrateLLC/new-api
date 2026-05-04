@@ -21,6 +21,20 @@ export default {
   content: ['./index.html', './src/**/*.{js,jsx,ts,tsx}'],
   theme: {
     colors: {
+      /* ===== New Design System Colors ===== */
+      'warm-bg': 'var(--bg)',
+      'warm-bg-soft': 'var(--bg-soft)',
+      'warm-border': 'var(--border)',
+      'warm-text': 'var(--text)',
+      'warm-sub': 'var(--sub)',
+      'warm-accent': 'var(--accent)',
+      'warm-accent2': 'var(--accent2)',
+      white: '#ffffff',
+      black: '#000000',
+      transparent: 'transparent',
+      current: 'currentColor',
+
+      /* ===== Semi UI variable mappings (keep for compatibility) ===== */
       'semi-color-white': 'var(--semi-color-white)',
       'semi-color-black': 'var(--semi-color-black)',
       'semi-color-primary': 'var(--semi-color-primary)',
@@ -142,6 +156,18 @@ export default {
         'semi-border-radius-large': 'var(--semi-border-radius-large)',
         'semi-border-radius-circle': 'var(--semi-border-radius-circle)',
         'semi-border-radius-full': 'var(--semi-border-radius-full)',
+      },
+      boxShadow: {
+        'warm': 'var(--shadow)',
+        'warm-lg': '0 4px 16px rgba(0,0,0,0.06)',
+        'warm-xl': '0 8px 32px rgba(0,0,0,0.08)',
+      },
+      transitionTimingFunction: {
+        'apple': 'cubic-bezier(0.25, 0.1, 0.25, 1)',
+      },
+      transitionDuration: {
+        '180': '180ms',
+        '240': '240ms',
       },
     },
   },

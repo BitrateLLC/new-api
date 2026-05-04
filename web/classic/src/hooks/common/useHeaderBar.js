@@ -43,8 +43,13 @@ export const useHeaderBar = ({ onMobileMenuToggle, drawerOpen }) => {
   const loading = statusState?.status === undefined;
   const isLoading = useMinimumLoadingTime(loading, 200);
 
+  const theme = useTheme();
+  const actualTheme = useActualTheme();
+  const setTheme = useSetTheme();
+
   const systemName = getSystemName();
-  const logo = getLogo();
+  // logo 需要跟随主题切换
+  const logo = useMemo(() => getLogo(), [actualTheme]);
   const currentDate = new Date();
   const isNewYear = currentDate.getMonth() === 0 && currentDate.getDate() === 1;
 
@@ -89,10 +94,6 @@ export const useHeaderBar = ({ onMobileMenuToggle, drawerOpen }) => {
   }, [headerNavModules]);
 
   const isConsoleRoute = location.pathname.startsWith('/console');
-
-  const theme = useTheme();
-  const actualTheme = useActualTheme();
-  const setTheme = useSetTheme();
 
   // Logo loading effect
   useEffect(() => {
@@ -140,8 +141,12 @@ export const useHeaderBar = ({ onMobileMenuToggle, drawerOpen }) => {
 
   // Actions
   const logout = useCallback(async () => {
-    await API.get('/api/user/logout');
-    showSuccess(t('注销成功!'));
+    try {
+      await API.get('/api/user/logout');
+      showSuccess(t('注销成功!'));
+    } catch (err) {
+      console.error('Failed to logout:', err);
+    }
     userDispatch({ type: 'logout' });
     localStorage.removeItem('user');
     navigate('/login');

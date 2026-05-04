@@ -66,12 +66,12 @@ const renderType = (type, record = {}, t) => {
     icon =
       channelInfo?.multi_key_mode === 'random' ? (
         <div className='flex items-center gap-1'>
-          <FaRandom className='text-blue-500' />
+          <FaRandom className='text-orange-500' />
           {icon}
         </div>
       ) : (
         <div className='flex items-center gap-1'>
-          <IconTreeTriangleDown className='text-blue-500' />
+          <IconTreeTriangleDown className='text-orange-500' />
           {icon}
         </div>
       );

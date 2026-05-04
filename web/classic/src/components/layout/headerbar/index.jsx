@@ -18,6 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React from 'react';
+import { Button, Dropdown } from '@douyinfe/semi-ui';
+import { IconMenu } from '@douyinfe/semi-icons';
 import { useHeaderBar } from '../../../hooks/common/useHeaderBar';
 import { useNotifications } from '../../../hooks/common/useNotifications';
 import { useNavigation } from '../../../hooks/common/useNavigation';
@@ -64,8 +66,24 @@ const HeaderBar = ({ onMobileMenuToggle, drawerOpen }) => {
 
   const { mainNavLinks } = useNavigation(t, docsLink, headerNavModules);
 
+  const handleMobileNavClick = (link) => {
+    if (link.isExternal) {
+      window.open(link.externalLink, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    let targetPath = link.to;
+    if (link.itemKey === 'console' && !userState.user) {
+      targetPath = '/login';
+    }
+    if (link.itemKey === 'pricing' && pricingRequireAuth && !userState.user) {
+      targetPath = '/login';
+    }
+    navigate(targetPath);
+  };
+
   return (
-    <header className='text-semi-color-text-0 sticky top-0 z-50 transition-colors duration-300 bg-white/75 dark:bg-zinc-900/75 backdrop-blur-lg'>
+    <header className='text-semi-color-text-0 transition-colors duration-300'>
       <NoticeModal
         visible={noticeVisible}
         onClose={handleNoticeClose}
@@ -75,8 +93,8 @@ const HeaderBar = ({ onMobileMenuToggle, drawerOpen }) => {
       />
 
       <div className='w-full px-2'>
-        <div className='flex items-center justify-between h-16'>
-          <div className='flex items-center'>
+        <div className='relative flex items-center justify-between h-16'>
+          <div className='flex items-center min-w-0 z-10'>
             <MobileMenuButton
               isConsoleRoute={isConsoleRoute}
               isMobile={isMobile}
@@ -85,6 +103,39 @@ const HeaderBar = ({ onMobileMenuToggle, drawerOpen }) => {
               onToggle={handleMobileMenuToggle}
               t={t}
             />
+
+            {isMobile && !isConsoleRoute && (
+              <Dropdown
+                position='bottomLeft'
+                render={
+                  <Dropdown.Menu
+                    className='!bg-semi-color-bg-overlay !border-semi-color-border !shadow-lg !rounded-2xl'
+                    style={{
+                      boxShadow: 'var(--hp-shadow-md)',
+                      border: '1px solid var(--hp-border)',
+                    }}
+                  >
+                    {mainNavLinks.map((link) => (
+                      <Dropdown.Item
+                        key={link.itemKey}
+                        onClick={() => handleMobileNavClick(link)}
+                        className='!px-3 !py-2 !text-sm !text-semi-color-text-0 hover:!bg-semi-color-fill-1 !rounded-xl !transition-all !duration-200'
+                      >
+                        {link.text}
+                      </Dropdown.Item>
+                    ))}
+                  </Dropdown.Menu>
+                }
+              >
+                <Button
+                  icon={<IconMenu className='text-lg' />}
+                  aria-label={t('导航菜单')}
+                  theme='borderless'
+                  type='tertiary'
+                  className='!p-2 !text-current focus:!bg-semi-color-fill-1 !rounded-xl !transition-all !duration-200'
+                />
+              </Dropdown>
+            )}
 
             <HeaderLogo
               isMobile={isMobile}
@@ -99,13 +150,19 @@ const HeaderBar = ({ onMobileMenuToggle, drawerOpen }) => {
             />
           </div>
 
-          <Navigation
-            mainNavLinks={mainNavLinks}
-            isMobile={isMobile}
-            isLoading={isLoading}
-            userState={userState}
-            pricingRequireAuth={pricingRequireAuth}
-          />
+          {!isMobile && (
+            <div className='absolute inset-0 flex items-center justify-center pointer-events-none'>
+              <div className='pointer-events-auto'>
+                <Navigation
+                  mainNavLinks={mainNavLinks}
+                  isMobile={isMobile}
+                  isLoading={isLoading}
+                  userState={userState}
+                  pricingRequireAuth={pricingRequireAuth}
+                />
+              </div>
+            </div>
+          )}
 
           <ActionButtons
             isNewYear={isNewYear}

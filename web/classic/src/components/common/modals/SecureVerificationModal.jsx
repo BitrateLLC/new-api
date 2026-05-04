@@ -89,7 +89,14 @@ const SecureVerificationModal = ({
         onCancel={onCancel}
         footer={<Button onClick={onCancel}>{t('确定')}</Button>}
         width={500}
-        style={{ maxWidth: '90vw' }}
+        centered
+        style={{
+          maxWidth: '90vw',
+          borderRadius: '16px',
+        }}
+        bodyStyle={{
+          padding: '24px',
+        }}
       >
         <div className='text-center py-6'>
           <div className='mb-4'>
@@ -131,9 +138,10 @@ const SecureVerificationModal = ({
       centered
       style={{
         maxWidth: 'calc(100vw - 32px)',
+        borderRadius: '16px',
       }}
       bodyStyle={{
-        padding: '20px 24px',
+        padding: '24px',
       }}
     >
       <div style={{ width: '100%' }}>

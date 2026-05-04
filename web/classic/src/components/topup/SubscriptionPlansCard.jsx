@@ -427,12 +427,12 @@ const SubscriptionPlansCard = ({
                             )}
                           </div>
                           {isActive && (
-                            <span className='text-gray-500'>
+                            <span className='text-xs' style={{ color: 'var(--hp-sub)' }}>
                               {t('剩余')} {remainDays} {t('天')}
                             </span>
                           )}
                         </div>
-                        <div className='text-xs text-gray-500 mb-2'>
+                        <div className='text-xs mb-2' style={{ color: 'var(--hp-sub)' }}>
                           {isActive
                             ? t('至')
                             : isCancelled
@@ -442,15 +442,7 @@ const SubscriptionPlansCard = ({
                             (subscription?.end_time || 0) * 1000,
                           ).toLocaleString()}
                         </div>
-                        {isActive && subscription?.next_reset_time > 0 && (
-                          <div className='text-xs text-gray-500 mb-2'>
-                            {t('下一次重置')}:{' '}
-                            {new Date(
-                              subscription.next_reset_time * 1000,
-                            ).toLocaleString()}
-                          </div>
-                        )}
-                        <div className='text-xs text-gray-500 mb-2'>
+                        <div className='text-xs mb-2' style={{ color: 'var(--hp-sub)' }}>
                           {t('总额度')}:{' '}
                           {totalAmount > 0 ? (
                             <Tooltip
@@ -478,7 +470,7 @@ const SubscriptionPlansCard = ({
                 </div>
               </>
             ) : (
-              <div className='text-xs text-gray-500'>
+              <div className='text-xs' style={{ color: 'var(--hp-sub)' }}>
                 {t('购买套餐后即可享受模型权益')}
               </div>
             )}
@@ -528,16 +520,40 @@ const SubscriptionPlansCard = ({
                 return (
                   <Card
                     key={plan?.id}
-                    className={`!rounded-xl transition-all hover:shadow-lg w-full h-full ${
-                      isPopular ? 'ring-2 ring-purple-500' : ''
-                    }`}
+                    className='!rounded-2xl w-full h-full'
                     bodyStyle={{ padding: 0 }}
+                    style={{
+                      background: 'var(--hp-card)',
+                      boxShadow: isPopular
+                        ? '0 0 0 2px var(--hp-accent), var(--hp-shadow)'
+                        : 'var(--hp-shadow)',
+                      border: 'none',
+                      transition: 'all 0.2s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.boxShadow = isPopular
+                        ? `0 0 0 2px var(--hp-accent), var(--hp-shadow-md)`
+                        : 'var(--hp-shadow-md)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.boxShadow = isPopular
+                        ? `0 0 0 2px var(--hp-accent), var(--hp-shadow)`
+                        : 'var(--hp-shadow)';
+                    }}
                   >
                     <div className='p-4 h-full flex flex-col'>
                       {/* 推荐标签 */}
                       {isPopular && (
                         <div className='mb-2'>
-                          <Tag color='purple' shape='circle' size='small'>
+                          <Tag
+                            shape='circle'
+                            size='small'
+                            style={{
+                              background: 'rgba(var(--hp-accent-rgb), 0.12)',
+                              color: 'var(--hp-accent)',
+                              border: 'none',
+                            }}
+                          >
                             <Sparkles size={10} className='mr-1' />
                             {t('推荐')}
                           </Tag>
@@ -548,7 +564,7 @@ const SubscriptionPlansCard = ({
                         <Typography.Title
                           heading={5}
                           ellipsis={{ rows: 1, showTooltip: true }}
-                          style={{ margin: 0 }}
+                          style={{ margin: 0, color: 'var(--hp-text)' }}
                         >
                           {plan?.title || t('订阅套餐')}
                         </Typography.Title>
@@ -557,7 +573,7 @@ const SubscriptionPlansCard = ({
                             type='tertiary'
                             size='small'
                             ellipsis={{ rows: 1, showTooltip: true }}
-                            style={{ display: 'block' }}
+                            style={{ display: 'block', color: 'var(--hp-sub)' }}
                           >
                             {plan.subtitle}
                           </Text>
@@ -566,22 +582,34 @@ const SubscriptionPlansCard = ({
 
                       {/* 价格区域 */}
                       <div className='py-2'>
-                        <div className='flex items-baseline justify-start'>
-                          <span className='text-xl font-bold text-purple-600'>
+                        <div className='flex items-baseline justify-start gap-0.5'>
+                          <span
+                            className='text-xl font-bold'
+                            style={{ color: 'var(--hp-accent)' }}
+                          >
                             {symbol}
                           </span>
-                          <span className='text-3xl font-bold text-purple-600'>
+                          <span
+                            className='text-3xl font-bold'
+                            style={{ color: 'var(--hp-accent)' }}
+                          >
                             {displayPrice}
                           </span>
                         </div>
                       </div>
 
                       {/* 套餐权益描述 */}
-                      <div className='flex flex-col items-start gap-1 pb-2'>
+                      <div className='flex flex-col items-start gap-1.5 pb-2'>
                         {planBenefits.map((item) => {
                           const content = (
-                            <div className='flex items-center gap-2 text-xs text-gray-500'>
-                              <Badge dot type='tertiary' />
+                            <div
+                              className='flex items-center gap-2 text-xs'
+                              style={{ color: 'var(--hp-sub)' }}
+                            >
+                              <div
+                                className='w-1.5 h-1.5 rounded-full flex-shrink-0'
+                                style={{ background: 'var(--hp-accent)', opacity: 0.6 }}
+                              />
                               <span>{item.label}</span>
                             </div>
                           );
@@ -617,13 +645,22 @@ const SubscriptionPlansCard = ({
                             : '';
                           const buttonEl = (
                             <Button
-                              theme='outline'
-                              type='primary'
+                              theme='solid'
                               block
                               disabled={reached}
                               onClick={() => {
                                 if (!reached) openBuy(p);
                               }}
+                              style={
+                                reached
+                                  ? {}
+                                  : {
+                                      background: 'var(--hp-accent)',
+                                      borderColor: 'var(--hp-accent)',
+                                      borderRadius: '10px',
+                                      transition: 'all 0.2s ease',
+                                    }
+                              }
                             >
                               {reached ? t('已达上限') : t('立即订阅')}
                             </Button>
@@ -643,7 +680,7 @@ const SubscriptionPlansCard = ({
               })}
             </div>
           ) : (
-            <div className='text-center text-gray-400 text-sm py-4'>
+            <div className='text-center text-sm py-4' style={{ color: 'var(--hp-sub)' }}>
               {t('暂无可购买套餐')}
             </div>
           )}
@@ -655,7 +692,15 @@ const SubscriptionPlansCard = ({
   return (
     <>
       {withCard ? (
-        <Card className='!rounded-2xl shadow-sm border-0'>{cardContent}</Card>
+        <Card
+          className='!rounded-2xl border-0'
+          style={{
+            background: 'var(--hp-card)',
+            boxShadow: 'var(--hp-shadow)',
+          }}
+        >
+          {cardContent}
+        </Card>
       ) : (
         <div className='space-y-3'>{cardContent}</div>
       )}

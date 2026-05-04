@@ -24,14 +24,16 @@ import PricingView from './PricingView';
 const PricingContent = ({ isMobile, sidebarProps, ...props }) => {
   return (
     <div
-      className={isMobile ? 'pricing-content-mobile' : 'pricing-scroll-hide'}
+      className={isMobile ? 'pricing-content-mobile' : 'pricing-content-inner'}
     >
-      {/* 固定的顶部区域（分类介绍 + 搜索和操作） */}
+      {/* 固定的顶部区域（供应商介绍 + 搜索和操作） */}
       <div className='pricing-search-header'>
         <PricingTopSection
           {...props}
           isMobile={isMobile}
           sidebarProps={sidebarProps}
+          filterVendor={sidebarProps.filterVendor}
+          models={sidebarProps.models}
           showWithRecharge={sidebarProps.showWithRecharge}
           setShowWithRecharge={sidebarProps.setShowWithRecharge}
           currency={sidebarProps.currency}

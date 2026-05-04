@@ -17,8 +17,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React from 'react';
-import { SideSheet, Typography, Button, Divider } from '@douyinfe/semi-ui';
+import React, { useEffect } from 'react';
+import { Typography } from '@douyinfe/semi-ui';
 import { IconClose } from '@douyinfe/semi-icons';
 
 import { useIsMobile } from '../../../../hooks/common/useIsMobile';
@@ -26,7 +26,6 @@ import ModelHeader from './components/ModelHeader';
 import ModelBasicInfo from './components/ModelBasicInfo';
 import ModelEndpoints from './components/ModelEndpoints';
 import ModelPricingTable from './components/ModelPricingTable';
-import DynamicPricingBreakdown from './components/DynamicPricingBreakdown';
 
 const { Text } = Typography;
 
@@ -48,84 +47,90 @@ const ModelDetailSideSheet = ({
 }) => {
   const isMobile = useIsMobile();
 
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (visible) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [visible]);
+
+  // Close on Escape key
+  useEffect(() => {
+    if (!visible) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [visible, onClose]);
+
+  if (!visible) return null;
+
   return (
-    <SideSheet
-      placement='right'
-      title={
-        <ModelHeader modelData={modelData} vendorsMap={vendorsMap} t={t} />
-      }
-      bodyStyle={{
-        padding: '0',
-        display: 'flex',
-        flexDirection: 'column',
-        borderBottom: '1px solid var(--semi-color-border)',
-      }}
-      visible={visible}
-      width={isMobile ? '100%' : 600}
-      closeIcon={
-        <Button
-          className='semi-button-tertiary semi-button-size-small semi-button-borderless'
-          type='button'
-          icon={<IconClose />}
-          onClick={onClose}
-        />
-      }
-      onCancel={onClose}
-    >
-      <div style={{ paddingTop: 16, paddingBottom: 16 }}>
-        {!modelData && (
-          <div className='flex justify-center items-center py-10'>
-            <Text type='secondary'>{t('加载中...')}</Text>
-          </div>
-        )}
-        {modelData && (
-          <>
-            <div style={{ padding: '0 24px' }}>
-              <ModelBasicInfo
-                modelData={modelData}
-                vendorsMap={vendorsMap}
-                t={t}
-              />
+    <div className='model-detail-modal-overlay' onClick={onClose}>
+      <div
+        className={`model-detail-modal ${isMobile ? 'model-detail-modal--mobile' : ''}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className='model-detail-modal-header'>
+          <ModelHeader modelData={modelData} vendorsMap={vendorsMap} t={t} />
+          <button
+            className='model-detail-modal-close'
+            onClick={onClose}
+            aria-label='Close'
+          >
+            <IconClose size='large' />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className='model-detail-modal-body'>
+          {!modelData && (
+            <div className='model-detail-modal-loading'>
+              <Text type='secondary'>{t('加载中...')}</Text>
             </div>
-            <Divider margin={16} />
-            <div style={{ padding: '0 24px' }}>
-              <ModelEndpoints
-                modelData={modelData}
-                endpointMap={endpointMap}
-                t={t}
-              />
+          )}
+          {modelData && (
+            <div className={`model-detail-modal-columns ${isMobile ? 'model-detail-modal-columns--mobile' : ''}`}>
+              {/* Left column: basic info + endpoints */}
+              <div className='model-detail-modal-col-left'>
+                <ModelBasicInfo
+                  modelData={modelData}
+                  vendorsMap={vendorsMap}
+                  t={t}
+                />
+                <ModelEndpoints
+                  modelData={modelData}
+                  endpointMap={endpointMap}
+                  t={t}
+                />
+              </div>
+              {/* Right column: pricing */}
+              <div className='model-detail-modal-col-right'>
+                <ModelPricingTable
+                  modelData={modelData}
+                  groupRatio={groupRatio}
+                  currency={currency}
+                  siteDisplayType={siteDisplayType}
+                  tokenUnit={tokenUnit}
+                  displayPrice={displayPrice}
+                  showRatio={showRatio}
+                  usableGroup={usableGroup}
+                  autoGroups={autoGroups}
+                  t={t}
+                />
+              </div>
             </div>
-            {modelData.billing_mode === 'tiered_expr' && modelData.billing_expr && (
-              <>
-                <Divider margin={16} />
-                <div style={{ padding: '0 24px' }}>
-                  <DynamicPricingBreakdown
-                    billingExpr={modelData.billing_expr}
-                    t={t}
-                  />
-                </div>
-              </>
-            )}
-            <Divider margin={16} />
-            <div style={{ padding: '0 24px' }}>
-              <ModelPricingTable
-                modelData={modelData}
-                groupRatio={groupRatio}
-                currency={currency}
-                siteDisplayType={siteDisplayType}
-                tokenUnit={tokenUnit}
-                displayPrice={displayPrice}
-                showRatio={showRatio}
-                usableGroup={usableGroup}
-                autoGroups={autoGroups}
-                t={t}
-              />
-            </div>
-            <Divider margin={16} />
-          </>
-        )}
+          )}
+        </div>
       </div>
-    </SideSheet>
+    </div>
   );
 };
 

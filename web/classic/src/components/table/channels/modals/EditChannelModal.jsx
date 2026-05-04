@@ -208,7 +208,6 @@ const EditChannelModal = (props) => {
     allow_safety_identifier: false,
     allow_include_obfuscation: false,
     allow_inference_geo: false,
-    allow_speed: false,
     claude_beta_query: false,
     upstream_model_update_check_enabled: false,
     upstream_model_update_auto_sync_enabled: false,
@@ -265,24 +264,6 @@ const EditChannelModal = (props) => {
         .map((value) => (typeof value === 'string' ? value.trim() : undefined))
         .filter((value) => value);
       return Array.from(new Set(values));
-    } catch (error) {
-      return [];
-    }
-  }, [inputs.model_mapping]);
-  const redirectModelKeyList = useMemo(() => {
-    const mapping = inputs.model_mapping;
-    if (typeof mapping !== 'string') return [];
-    const trimmed = mapping.trim();
-    if (!trimmed) return [];
-    try {
-      const parsed = JSON.parse(trimmed);
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        return [];
-      }
-      const keys = Object.keys(parsed)
-        .map((key) => key.trim())
-        .filter((key) => key);
-      return Array.from(new Set(keys));
     } catch (error) {
       return [];
     }
@@ -821,57 +802,66 @@ const EditChannelModal = (props) => {
 
   const loadChannel = async () => {
     setLoading(true);
-    let res = await API.get(`/api/channel/${channelId}`);
-    if (res === undefined) {
-      return;
-    }
-    const { success, message, data } = res.data;
-    if (success) {
-      if (data.models === '') {
-        data.models = [];
-      } else {
-        data.models = data.models.split(',');
+    try {
+      let res = await API.get(`/api/channel/${channelId}`);
+      if (res === undefined) {
+        return;
       }
-      if (data.group === '') {
-        data.groups = [];
-      } else {
-        data.groups = data.group.split(',');
-      }
-      if (data.model_mapping !== '') {
-        data.model_mapping = JSON.stringify(
-          JSON.parse(data.model_mapping),
-          null,
-          2,
-        );
-      }
-      const chInfo = data.channel_info || {};
-      const isMulti = chInfo.is_multi_key === true;
-      setIsMultiKeyChannel(isMulti);
-      if (isMulti) {
-        setBatch(true);
-        setMultiToSingle(true);
-        const modeVal = chInfo.multi_key_mode || 'random';
-        setMultiKeyMode(modeVal);
-        data.multi_key_mode = modeVal;
-      } else {
-        setBatch(false);
-        setMultiToSingle(false);
-      }
-      // 解析渠道额外设置并合并到data中
-      if (data.setting) {
-        try {
-          const parsedSettings = JSON.parse(data.setting);
-          data.force_format = parsedSettings.force_format || false;
-          data.thinking_to_content =
-            parsedSettings.thinking_to_content || false;
-          data.proxy = parsedSettings.proxy || '';
-          data.pass_through_body_enabled =
-            parsedSettings.pass_through_body_enabled || false;
-          data.system_prompt = parsedSettings.system_prompt || '';
-          data.system_prompt_override =
-            parsedSettings.system_prompt_override || false;
-        } catch (error) {
-          console.error('解析渠道设置失败:', error);
+      const { success, message, data } = res.data;
+      if (success) {
+        if (data.models === '') {
+          data.models = [];
+        } else {
+          data.models = data.models.split(',');
+        }
+        if (data.group === '') {
+          data.groups = [];
+        } else {
+          data.groups = data.group.split(',');
+        }
+        if (data.model_mapping !== '') {
+          data.model_mapping = JSON.stringify(
+            JSON.parse(data.model_mapping),
+            null,
+            2,
+          );
+        }
+        const chInfo = data.channel_info || {};
+        const isMulti = chInfo.is_multi_key === true;
+        setIsMultiKeyChannel(isMulti);
+        if (isMulti) {
+          setBatch(true);
+          setMultiToSingle(true);
+          const modeVal = chInfo.multi_key_mode || 'random';
+          setMultiKeyMode(modeVal);
+          data.multi_key_mode = modeVal;
+        } else {
+          setBatch(false);
+          setMultiToSingle(false);
+        }
+        // 解析渠道额外设置并合并到data中
+        if (data.setting) {
+          try {
+            const parsedSettings = JSON.parse(data.setting);
+            data.force_format = parsedSettings.force_format || false;
+            data.thinking_to_content =
+              parsedSettings.thinking_to_content || false;
+            data.proxy = parsedSettings.proxy || '';
+            data.pass_through_body_enabled =
+              parsedSettings.pass_through_body_enabled || false;
+            data.system_prompt = parsedSettings.system_prompt || '';
+            data.system_prompt_override =
+              parsedSettings.system_prompt_override || false;
+          } catch (error) {
+            console.error('解析渠道设置失败:', error);
+            data.force_format = false;
+            data.thinking_to_content = false;
+            data.proxy = '';
+            data.pass_through_body_enabled = false;
+            data.system_prompt = '';
+            data.system_prompt_override = false;
+          }
+        } else {
           data.force_format = false;
           data.thinking_to_content = false;
           data.proxy = '';
@@ -879,58 +869,66 @@ const EditChannelModal = (props) => {
           data.system_prompt = '';
           data.system_prompt_override = false;
         }
-      } else {
-        data.force_format = false;
-        data.thinking_to_content = false;
-        data.proxy = '';
-        data.pass_through_body_enabled = false;
-        data.system_prompt = '';
-        data.system_prompt_override = false;
-      }
 
-      if (data.settings) {
-        try {
-          const parsedSettings = JSON.parse(data.settings);
-          data.azure_responses_version =
-            parsedSettings.azure_responses_version || '';
-          // 读取 Vertex 密钥格式
-          data.vertex_key_type = parsedSettings.vertex_key_type || 'json';
-          // 读取 AWS 密钥格式和区域
-          data.aws_key_type = parsedSettings.aws_key_type || 'ak_sk';
-          // 读取企业账户设置
-          data.is_enterprise_account =
-            parsedSettings.openrouter_enterprise === true;
-          // 读取字段透传控制设置
-          data.allow_service_tier = parsedSettings.allow_service_tier || false;
-          data.disable_store = parsedSettings.disable_store || false;
-          data.allow_safety_identifier =
-            parsedSettings.allow_safety_identifier || false;
-          data.allow_include_obfuscation =
-            parsedSettings.allow_include_obfuscation || false;
-          data.allow_inference_geo =
-            parsedSettings.allow_inference_geo || false;
-          data.allow_speed = parsedSettings.allow_speed || false;
-          data.claude_beta_query = parsedSettings.claude_beta_query || false;
-          data.upstream_model_update_check_enabled =
-            parsedSettings.upstream_model_update_check_enabled === true;
-          data.upstream_model_update_auto_sync_enabled =
-            parsedSettings.upstream_model_update_auto_sync_enabled === true;
-          data.upstream_model_update_last_check_time =
-            Number(parsedSettings.upstream_model_update_last_check_time) || 0;
-          data.upstream_model_update_last_detected_models = Array.isArray(
-            parsedSettings.upstream_model_update_last_detected_models,
-          )
-            ? parsedSettings.upstream_model_update_last_detected_models
-            : [];
-          data.upstream_model_update_ignored_models = Array.isArray(
-            parsedSettings.upstream_model_update_ignored_models,
-          )
-            ? parsedSettings.upstream_model_update_ignored_models.join(',')
-            : '';
-        } catch (error) {
-          console.error('解析其他设置失败:', error);
-          data.azure_responses_version = '';
-          data.region = '';
+        if (data.settings) {
+          try {
+            const parsedSettings = JSON.parse(data.settings);
+            data.azure_responses_version =
+              parsedSettings.azure_responses_version || '';
+            // 读取 Vertex 密钥格式
+            data.vertex_key_type = parsedSettings.vertex_key_type || 'json';
+            // 读取 AWS 密钥格式和区域
+            data.aws_key_type = parsedSettings.aws_key_type || 'ak_sk';
+            // 读取企业账户设置
+            data.is_enterprise_account =
+              parsedSettings.openrouter_enterprise === true;
+            // 读取字段透传控制设置
+            data.allow_service_tier = parsedSettings.allow_service_tier || false;
+            data.disable_store = parsedSettings.disable_store || false;
+            data.allow_safety_identifier =
+              parsedSettings.allow_safety_identifier || false;
+            data.allow_include_obfuscation =
+              parsedSettings.allow_include_obfuscation || false;
+            data.allow_inference_geo =
+              parsedSettings.allow_inference_geo || false;
+            data.claude_beta_query = parsedSettings.claude_beta_query || false;
+            data.upstream_model_update_check_enabled =
+              parsedSettings.upstream_model_update_check_enabled === true;
+            data.upstream_model_update_auto_sync_enabled =
+              parsedSettings.upstream_model_update_auto_sync_enabled === true;
+            data.upstream_model_update_last_check_time =
+              Number(parsedSettings.upstream_model_update_last_check_time) || 0;
+            data.upstream_model_update_last_detected_models = Array.isArray(
+              parsedSettings.upstream_model_update_last_detected_models,
+            )
+              ? parsedSettings.upstream_model_update_last_detected_models
+              : [];
+            data.upstream_model_update_ignored_models = Array.isArray(
+              parsedSettings.upstream_model_update_ignored_models,
+            )
+              ? parsedSettings.upstream_model_update_ignored_models.join(',')
+              : '';
+          } catch (error) {
+            console.error('解析其他设置失败:', error);
+            data.azure_responses_version = '';
+            data.region = '';
+            data.vertex_key_type = 'json';
+            data.aws_key_type = 'ak_sk';
+            data.is_enterprise_account = false;
+            data.allow_service_tier = false;
+            data.disable_store = false;
+            data.allow_safety_identifier = false;
+            data.allow_include_obfuscation = false;
+            data.allow_inference_geo = false;
+            data.claude_beta_query = false;
+            data.upstream_model_update_check_enabled = false;
+            data.upstream_model_update_auto_sync_enabled = false;
+            data.upstream_model_update_last_check_time = 0;
+            data.upstream_model_update_last_detected_models = [];
+            data.upstream_model_update_ignored_models = '';
+          }
+        } else {
+          // 兼容历史数据：老渠道没有 settings 时，默认按 json 展示
           data.vertex_key_type = 'json';
           data.aws_key_type = 'ak_sk';
           data.is_enterprise_account = false;
@@ -939,7 +937,6 @@ const EditChannelModal = (props) => {
           data.allow_safety_identifier = false;
           data.allow_include_obfuscation = false;
           data.allow_inference_geo = false;
-          data.allow_speed = false;
           data.claude_beta_query = false;
           data.upstream_model_update_check_enabled = false;
           data.upstream_model_update_auto_sync_enabled = false;
@@ -947,104 +944,90 @@ const EditChannelModal = (props) => {
           data.upstream_model_update_last_detected_models = [];
           data.upstream_model_update_ignored_models = '';
         }
-      } else {
-        // 兼容历史数据：老渠道没有 settings 时，默认按 json 展示
-        data.vertex_key_type = 'json';
-        data.aws_key_type = 'ak_sk';
-        data.is_enterprise_account = false;
-        data.allow_service_tier = false;
-        data.disable_store = false;
-        data.allow_safety_identifier = false;
-        data.allow_include_obfuscation = false;
-        data.allow_inference_geo = false;
-        data.allow_speed = false;
-        data.claude_beta_query = false;
-        data.upstream_model_update_check_enabled = false;
-        data.upstream_model_update_auto_sync_enabled = false;
-        data.upstream_model_update_last_check_time = 0;
-        data.upstream_model_update_last_detected_models = [];
-        data.upstream_model_update_ignored_models = '';
-      }
 
-      if (
-        data.type === 45 &&
-        (!data.base_url ||
-          (typeof data.base_url === 'string' && data.base_url.trim() === ''))
-      ) {
-        data.base_url = 'https://ark.cn-beijing.volces.com';
-      }
-
-      initialBaseUrlRef.current = data.base_url || '';
-      setInputs(data);
-      if (formApiRef.current) {
-        formApiRef.current.setValues(data);
-      }
-      if (data.auto_ban === 0) {
-        setAutoBan(false);
-      } else {
-        setAutoBan(true);
-      }
-      // 同步企业账户状态
-      setIsEnterpriseAccount(data.is_enterprise_account || false);
-      setBasicModels(getChannelModels(data.type));
-      // 同步更新channelSettings状态显示
-      setChannelSettings({
-        force_format: data.force_format,
-        thinking_to_content: data.thinking_to_content,
-        proxy: data.proxy,
-        pass_through_body_enabled: data.pass_through_body_enabled,
-        system_prompt: data.system_prompt,
-        system_prompt_override: data.system_prompt_override || false,
-      });
-      initialModelsRef.current = (data.models || [])
-        .map((model) => (model || '').trim())
-        .filter(Boolean);
-      initialModelMappingRef.current = data.model_mapping || '';
-      initialStatusCodeMappingRef.current = data.status_code_mapping || '';
-
-      let parsedIonet = null;
-      if (data.other_info) {
-        try {
-          const maybeMeta = JSON.parse(data.other_info);
-          if (
-            maybeMeta &&
-            typeof maybeMeta === 'object' &&
-            maybeMeta.source === 'ionet'
-          ) {
-            parsedIonet = maybeMeta;
-          }
-        } catch (error) {
-          // ignore parse error
+        if (
+          data.type === 45 &&
+          (!data.base_url ||
+            (typeof data.base_url === 'string' && data.base_url.trim() === ''))
+        ) {
+          data.base_url = 'https://ark.cn-beijing.volces.com';
         }
-      }
-      const managedByIonet = !!parsedIonet;
-      setIsIonetChannel(managedByIonet);
-      setIonetMetadata(parsedIonet);
 
-      // Smart expand: auto-open advanced settings if any advanced field has a value
-      const hasAdvancedValues =
-        (data.model_mapping && data.model_mapping.trim()) ||
-        (data.param_override && data.param_override.trim()) ||
-        (data.status_code_mapping && data.status_code_mapping.trim()) ||
-        (data.header_override && data.header_override.trim()) ||
-        (data.tag && data.tag.trim()) ||
-        (data.remark && data.remark.trim()) ||
-        (data.priority && data.priority !== 0) ||
-        (data.weight && data.weight !== 0) ||
-        (data.proxy && data.proxy.trim()) ||
-        (data.system_prompt && data.system_prompt.trim()) ||
-        data.thinking_to_content ||
-        data.pass_through_body_enabled ||
-        data.force_format ||
-        data.claude_beta_query ||
-        data.system_prompt_override;
-      if (hasAdvancedValues) {
-        setAdvancedSettingsOpen(true);
+        initialBaseUrlRef.current = data.base_url || '';
+        setInputs(data);
+        if (formApiRef.current) {
+          formApiRef.current.setValues(data);
+        }
+        if (data.auto_ban === 0) {
+          setAutoBan(false);
+        } else {
+          setAutoBan(true);
+        }
+        // 同步企业账户状态
+        setIsEnterpriseAccount(data.is_enterprise_account || false);
+        setBasicModels(getChannelModels(data.type));
+        // 同步更新channelSettings状态显示
+        setChannelSettings({
+          force_format: data.force_format,
+          thinking_to_content: data.thinking_to_content,
+          proxy: data.proxy,
+          pass_through_body_enabled: data.pass_through_body_enabled,
+          system_prompt: data.system_prompt,
+          system_prompt_override: data.system_prompt_override || false,
+        });
+        initialModelsRef.current = (data.models || [])
+          .map((model) => (model || '').trim())
+          .filter(Boolean);
+        initialModelMappingRef.current = data.model_mapping || '';
+        initialStatusCodeMappingRef.current = data.status_code_mapping || '';
+
+        let parsedIonet = null;
+        if (data.other_info) {
+          try {
+            const maybeMeta = JSON.parse(data.other_info);
+            if (
+              maybeMeta &&
+              typeof maybeMeta === 'object' &&
+              maybeMeta.source === 'ionet'
+            ) {
+              parsedIonet = maybeMeta;
+            }
+          } catch (error) {
+            // ignore parse error
+          }
+        }
+        const managedByIonet = !!parsedIonet;
+        setIsIonetChannel(managedByIonet);
+        setIonetMetadata(parsedIonet);
+
+        // Smart expand: auto-open advanced settings if any advanced field has a value
+        const hasAdvancedValues =
+          (data.model_mapping && data.model_mapping.trim()) ||
+          (data.param_override && data.param_override.trim()) ||
+          (data.status_code_mapping && data.status_code_mapping.trim()) ||
+          (data.header_override && data.header_override.trim()) ||
+          (data.tag && data.tag.trim()) ||
+          (data.remark && data.remark.trim()) ||
+          (data.priority && data.priority !== 0) ||
+          (data.weight && data.weight !== 0) ||
+          (data.proxy && data.proxy.trim()) ||
+          (data.system_prompt && data.system_prompt.trim()) ||
+          data.thinking_to_content ||
+          data.pass_through_body_enabled ||
+          data.force_format ||
+          data.claude_beta_query ||
+          data.system_prompt_override;
+        if (hasAdvancedValues) {
+          setAdvancedSettingsOpen(true);
+        }
+      } else {
+        showError(message);
       }
-    } else {
-      showError(message);
+    } catch (error) {
+      console.error('Failed to load channel:', error);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const fetchUpstreamModelList = async (name, options = {}) => {
@@ -1057,58 +1040,65 @@ const EditChannelModal = (props) => {
     const models = [];
     let err = false;
 
-    if (isEdit) {
-      // 如果是编辑模式，使用已有的 channelId 获取模型列表
-      const res = await API.get('/api/channel/fetch_models/' + channelId, {
-        skipErrorHandler: true,
-      });
-      if (res && res.data && res.data.success) {
-        models.push(...res.data.data);
-      } else {
-        err = true;
-      }
-    } else {
-      // 如果是新建模式，通过后端代理获取模型列表
-      if (!inputs?.['key']) {
-        showError(t('请填写密钥'));
-        err = true;
-      } else {
-        try {
-          const res = await API.post(
-            '/api/channel/fetch_models',
-            {
-              base_url: inputs['base_url'],
-              type: inputs['type'],
-              key: inputs['key'],
-            },
-            { skipErrorHandler: true },
-          );
-
-          if (res && res.data && res.data.success) {
-            models.push(...res.data.data);
-          } else {
-            err = true;
-          }
-        } catch (error) {
-          console.error('Error fetching models:', error);
+    try {
+      if (isEdit) {
+        // 如果是编辑模式，使用已有的 channelId 获取模型列表
+        const res = await API.get('/api/channel/fetch_models/' + channelId, {
+          skipErrorHandler: true,
+        });
+        if (res && res.data && res.data.success) {
+          models.push(...res.data.data);
+        } else {
           err = true;
         }
-      }
-    }
+      } else {
+        // 如果是新建模式，通过后端代理获取模型列表
+        if (!inputs?.['key']) {
+          showError(t('请填写密钥'));
+          err = true;
+        } else {
+          try {
+            const res = await API.post(
+              '/api/channel/fetch_models',
+              {
+                base_url: inputs['base_url'],
+                type: inputs['type'],
+                key: inputs['key'],
+              },
+              { skipErrorHandler: true },
+            );
 
-    if (!err) {
-      const uniqueModels = Array.from(new Set(models));
-      setFetchedModels(uniqueModels);
-      if (!silent) {
-        setModelModalVisible(true);
+            if (res && res.data && res.data.success) {
+              models.push(...res.data.data);
+            } else {
+              err = true;
+            }
+          } catch (error) {
+            console.error('Error fetching models:', error);
+            err = true;
+          }
+        }
       }
-      setLoading(false);
-      return uniqueModels;
-    } else {
+
+      if (!err) {
+        const uniqueModels = Array.from(new Set(models));
+        setFetchedModels(uniqueModels);
+        if (!silent) {
+          setModelModalVisible(true);
+        }
+        return uniqueModels;
+      } else {
+        showError(t('获取模型列表失败'));
+      }
+      return null;
+    } catch (error) {
+      console.error('Failed to fetch upstream model list:', error);
+      err = true;
       showError(t('获取模型列表失败'));
+      return null;
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-    return null;
   };
 
   const openModelMappingValueModal = async ({ pairKey, value }) => {
@@ -1798,7 +1788,6 @@ const EditChannelModal = (props) => {
       }
       if (localInputs.type === 14) {
         settings.allow_inference_geo = localInputs.allow_inference_geo === true;
-        settings.allow_speed = localInputs.allow_speed === true;
         settings.claude_beta_query = localInputs.claude_beta_query === true;
       }
     }
@@ -1846,7 +1835,6 @@ const EditChannelModal = (props) => {
     delete localInputs.allow_safety_identifier;
     delete localInputs.allow_include_obfuscation;
     delete localInputs.allow_inference_geo;
-    delete localInputs.allow_speed;
     delete localInputs.claude_beta_query;
     delete localInputs.upstream_model_update_check_enabled;
     delete localInputs.upstream_model_update_auto_sync_enabled;
@@ -1864,31 +1852,36 @@ const EditChannelModal = (props) => {
       mode = multiToSingle ? 'multi_to_single' : 'batch';
     }
 
-    if (isEdit) {
-      res = await API.put(`/api/channel/`, {
-        ...localInputs,
-        id: parseInt(channelId),
-        key_mode: isMultiKeyChannel ? keyMode : undefined, // 只在多key模式下传递
-      });
-    } else {
-      res = await API.post(`/api/channel/`, {
-        mode: mode,
-        multi_key_mode: mode === 'multi_to_single' ? multiKeyMode : undefined,
-        channel: localInputs,
-      });
-    }
-    const { success, message } = res.data;
-    if (success) {
+    try {
       if (isEdit) {
-        showSuccess(t('渠道更新成功！'));
+        res = await API.put(`/api/channel/`, {
+          ...localInputs,
+          id: parseInt(channelId),
+          key_mode: isMultiKeyChannel ? keyMode : undefined, // 只在多key模式下传递
+        });
       } else {
-        showSuccess(t('渠道创建成功！'));
-        setInputs(originInputs);
+        res = await API.post(`/api/channel/`, {
+          mode: mode,
+          multi_key_mode: mode === 'multi_to_single' ? multiKeyMode : undefined,
+          channel: localInputs,
+        });
       }
-      props.refresh();
-      props.handleClose();
-    } else {
-      showError(message);
+      const { success, message } = res.data;
+      if (success) {
+        if (isEdit) {
+          showSuccess(t('渠道更新成功！'));
+        } else {
+          showSuccess(t('渠道创建成功！'));
+          setInputs(originInputs);
+        }
+        props.refresh();
+        props.handleClose();
+      } else {
+        showError(message);
+      }
+    } catch (error) {
+      console.error('Failed to submit channel:', error);
+      showError(t('操作失败，请检查网络或稍后重试'));
     }
   };
 
@@ -2105,9 +2098,9 @@ const EditChannelModal = (props) => {
     // 构建样式类名
     const optionClassName = [
       'flex items-center gap-3 px-3 py-2 transition-all duration-200 rounded-lg mx-2 my-1',
-      focused && 'bg-blue-50 shadow-sm',
+      focused && 'bg-orange-50 shadow-sm',
       selected &&
-        'bg-blue-100 text-blue-700 shadow-lg ring-2 ring-blue-200 ring-opacity-50',
+        'bg-orange-100 text-orange-700 shadow-lg ring-2 ring-orange-200 ring-opacity-50',
       disabled && 'opacity-50 cursor-not-allowed',
       !disabled && 'hover:bg-gray-50 hover:shadow-md cursor-pointer',
       className,
@@ -2134,7 +2127,7 @@ const EditChannelModal = (props) => {
             />
           </div>
           {selected && (
-            <div className='flex-shrink-0 text-blue-600'>
+            <div className='flex-shrink-0 text-orange-600'>
               <svg
                 width='16'
                 height='16'
@@ -2504,7 +2497,6 @@ const EditChannelModal = (props) => {
                       </div>
                       <Form.Switch field='allow_service_tier' label={t('允许 service_tier 透传')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelOtherSettingsChange('allow_service_tier', value)} extraText={t('service_tier 字段用于指定服务层级，允许透传可能导致实际计费高于预期。默认关闭以避免额外费用')} />
                       <Form.Switch field='allow_inference_geo' label={t('允许 inference_geo 透传')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelOtherSettingsChange('allow_inference_geo', value)} extraText={t('inference_geo 字段用于控制 Claude 数据驻留推理区域。默认关闭以避免未经授权透传地域信息')} />
-                      <Form.Switch field='allow_speed' label={t('允许 speed 透传')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelOtherSettingsChange('allow_speed', value)} extraText={t('speed 字段用于控制 Claude 推理速度模式。默认关闭以避免意外切换到 fast 模式')} />
                     </>
                   )}
                 </div>
@@ -3860,7 +3852,6 @@ const EditChannelModal = (props) => {
         models={fetchedModels}
         selected={inputs.models}
         redirectModels={redirectModelList}
-        redirectSourceModels={redirectModelKeyList}
         onConfirm={(selectedModels) => {
           handleInputChange('models', selectedModels);
           showSuccess(t('模型列表已更新'));

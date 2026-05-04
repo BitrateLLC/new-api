@@ -72,15 +72,20 @@ export const useUsersData = () => {
   // Load users data
   const loadUsers = async (startIdx, pageSize) => {
     setLoading(true);
-    const res = await API.get(`/api/user/?p=${startIdx}&page_size=${pageSize}`);
-    const { success, message, data } = res.data;
-    if (success) {
-      const newPageData = data.items;
-      setActivePage(data.page);
-      setUserCount(data.total);
-      setUserFormat(newPageData);
-    } else {
-      showError(message);
+    try {
+      const res = await API.get(`/api/user/?p=${startIdx}&page_size=${pageSize}`);
+      const { success, message, data } = res.data;
+      if (success) {
+        const newPageData = data.items;
+        setActivePage(data.page);
+        setUserCount(data.total);
+        setUserFormat(newPageData);
+      } else {
+        showError(message);
+      }
+    } catch (error) {
+      console.error('Failed to load users:', error);
+      showError(error.message || 'Failed to load users');
     }
     setLoading(false);
   };
@@ -105,17 +110,22 @@ export const useUsersData = () => {
       return;
     }
     setSearching(true);
-    const res = await API.get(
-      `/api/user/search?keyword=${searchKeyword}&group=${searchGroup}&p=${startIdx}&page_size=${pageSize}`,
-    );
-    const { success, message, data } = res.data;
-    if (success) {
-      const newPageData = data.items;
-      setActivePage(data.page);
-      setUserCount(data.total);
-      setUserFormat(newPageData);
-    } else {
-      showError(message);
+    try {
+      const res = await API.get(
+        `/api/user/search?keyword=${searchKeyword}&group=${searchGroup}&p=${startIdx}&page_size=${pageSize}`,
+      );
+      const { success, message, data } = res.data;
+      if (success) {
+        const newPageData = data.items;
+        setActivePage(data.page);
+        setUserCount(data.total);
+        setUserFormat(newPageData);
+      } else {
+        showError(message);
+      }
+    } catch (error) {
+      console.error('Failed to search users:', error);
+      showError(error.message || 'Failed to search users');
     }
     setSearching(false);
   };
@@ -125,30 +135,35 @@ export const useUsersData = () => {
     // Trigger loading state to force table re-render
     setLoading(true);
 
-    const res = await API.post('/api/user/manage', {
-      id: userId,
-      action,
-    });
-
-    const { success, message } = res.data;
-    if (success) {
-      showSuccess(t('操作成功完成！'));
-      const user = res.data.data;
-
-      // Create a new array and new object to ensure React detects changes
-      const newUsers = users.map((u) => {
-        if (u.id === userId) {
-          if (action === 'delete') {
-            return { ...u, DeletedAt: new Date() };
-          }
-          return { ...u, status: user.status, role: user.role };
-        }
-        return u;
+    try {
+      const res = await API.post('/api/user/manage', {
+        id: userId,
+        action,
       });
 
-      setUsers(newUsers);
-    } else {
-      showError(message);
+      const { success, message } = res.data;
+      if (success) {
+        showSuccess(t('操作成功完成！'));
+        const user = res.data.data;
+
+        // Create a new array and new object to ensure React detects changes
+        const newUsers = users.map((u) => {
+          if (u.id === userId) {
+            if (action === 'delete') {
+              return { ...u, DeletedAt: new Date() };
+            }
+            return { ...u, status: user.status, role: user.role };
+          }
+          return u;
+        });
+
+        setUsers(newUsers);
+      } else {
+        showError(message);
+      }
+    } catch (error) {
+      console.error('Failed to manage user:', error);
+      showError(error.message || 'Failed to manage user');
     }
 
     setLoading(false);

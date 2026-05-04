@@ -259,7 +259,13 @@ func (info *RelayInfo) ToString() string {
 	fmt.Fprintf(b, "Token{ Id: %d, Unlimited: %t, Key: ***masked*** }, ", info.TokenId, info.TokenUnlimited)
 
 	// Time info
-	latencyMs := info.FirstResponseTime.Sub(info.StartTime).Milliseconds()
+	latencyMs := int64(0)
+	if info.HasSendResponse() {
+		latencyMs = info.FirstResponseTime.Sub(info.StartTime).Milliseconds()
+		if latencyMs < 0 {
+			latencyMs = 0
+		}
+	}
 	fmt.Fprintf(b, "Timing{ Start: %s, FirstResponse: %s, LatencyMs: %d }, ",
 		info.StartTime.Format(time.RFC3339Nano), info.FirstResponseTime.Format(time.RFC3339Nano), latencyMs)
 

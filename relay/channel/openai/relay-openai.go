@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -14,6 +16,7 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 
 	"github.com/QuantumNous/new-api/types"
 
@@ -332,6 +335,216 @@ func streamTTSResponse(c *gin.Context, resp *http.Response) {
 	}
 }
 
+func OpenaiImageStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*dto.Usage, *types.NewAPIError) {
+	defer service.CloseResponseBodyGracefully(resp)
+
+	if resp == nil || resp.Body == nil {
+		return nil, types.NewOpenAIError(fmt.Errorf("invalid response"), types.ErrorCodeBadResponse, http.StatusInternalServerError)
+	}
+
+	for key, values := range resp.Header {
+		if strings.EqualFold(key, "Content-Length") {
+			continue
+		}
+		for _, value := range values {
+			c.Writer.Header().Add(key, value)
+		}
+	}
+	helper.SetEventStreamHeaders(c)
+	c.Writer.WriteHeader(resp.StatusCode)
+
+	flusher, ok := c.Writer.(http.Flusher)
+	if !ok {
+		info.SetFirstResponseTime()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			logger.LogWarn(c, err.Error())
+			return &dto.Usage{PromptTokens: 1, TotalTokens: 1}, nil
+		}
+		if _, err = c.Writer.Write(body); err != nil {
+			logger.LogWarn(c, err.Error())
+		}
+		if usage, ok := extractImageUsageFromBody(body); ok {
+			return usage, nil
+		}
+		return &dto.Usage{PromptTokens: 1, TotalTokens: 1}, nil
+	}
+
+	buffer := make([]byte, 4096)
+	eventBuffer := ""
+	usage := &dto.Usage{}
+	hasUsage := false
+	generalSettings := operation_setting.GetGeneralSetting()
+	pingInterval := time.Duration(generalSettings.PingIntervalSeconds) * time.Second
+	if pingInterval <= 0 {
+		pingInterval = 10 * time.Second
+	}
+	pingEnabled := generalSettings.PingIntervalEnabled && !info.DisablePing
+	stopPing := make(chan struct{})
+	var pingOnce sync.Once
+	var writeMutex sync.Mutex
+	stopPingFunc := func() {
+		pingOnce.Do(func() {
+			close(stopPing)
+		})
+	}
+	if pingEnabled {
+		go func() {
+			ticker := time.NewTicker(pingInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					writeMutex.Lock()
+					if _, err := c.Writer.Write([]byte(": PING\n\n")); err != nil {
+						writeMutex.Unlock()
+						logger.LogError(c, "image stream ping error: "+err.Error())
+						stopPingFunc()
+						return
+					}
+					flusher.Flush()
+					writeMutex.Unlock()
+				case <-stopPing:
+					return
+				case <-c.Request.Context().Done():
+					return
+				}
+			}
+		}()
+	}
+	defer stopPingFunc()
+	for {
+		n, readErr := resp.Body.Read(buffer)
+		if n > 0 {
+			info.SetFirstResponseTime()
+			eventBuffer += strings.ReplaceAll(string(buffer[:n]), "\r\n", "\n")
+			for {
+				delimiterIndex := strings.Index(eventBuffer, "\n\n")
+				if delimiterIndex == -1 {
+					break
+				}
+				rawEvent := eventBuffer[:delimiterIndex]
+				eventBuffer = eventBuffer[delimiterIndex+2:]
+				if streamUsage, ok := extractImageUsageFromSSEEvent(rawEvent); ok {
+					usage = streamUsage
+					hasUsage = true
+				}
+			}
+			writeMutex.Lock()
+			_, writeErr := c.Writer.Write(buffer[:n])
+			if writeErr == nil {
+				flusher.Flush()
+			}
+			writeMutex.Unlock()
+			if writeErr != nil {
+				logger.LogError(c, writeErr.Error())
+				break
+			}
+		}
+		if readErr != nil {
+			if readErr != io.EOF {
+				logger.LogError(c, readErr.Error())
+			}
+			break
+		}
+	}
+
+	if strings.TrimSpace(eventBuffer) != "" {
+		if streamUsage, ok := extractImageUsageFromSSEEvent(eventBuffer); ok {
+			usage = streamUsage
+			hasUsage = true
+		}
+	}
+
+	if hasUsage {
+		return usage, nil
+	}
+	return &dto.Usage{PromptTokens: 1, TotalTokens: 1}, nil
+}
+
+func extractImageUsageFromBody(body []byte) (*dto.Usage, bool) {
+	if len(body) == 0 {
+		return nil, false
+	}
+	var payload struct {
+		Usage *dto.Usage `json:"usage"`
+	}
+	if err := common.Unmarshal(body, &payload); err != nil || payload.Usage == nil {
+		return nil, false
+	}
+	normalizeImageUsage(payload.Usage)
+	return payload.Usage, service.ValidUsage(payload.Usage)
+}
+
+func extractImageUsageFromSSEEvent(rawEvent string) (*dto.Usage, bool) {
+	if strings.TrimSpace(rawEvent) == "" {
+		return nil, false
+	}
+	lines := strings.Split(strings.ReplaceAll(rawEvent, "\r\n", "\n"), "\n")
+	dataLines := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if strings.HasPrefix(line, "data:") {
+			data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+			if data != "" && data != "[DONE]" {
+				dataLines = append(dataLines, data)
+			}
+		}
+	}
+	if len(dataLines) == 0 {
+		return nil, false
+	}
+	return extractImageUsageFromBody([]byte(strings.Join(dataLines, "\n")))
+}
+
+func normalizeImageUsage(usage *dto.Usage) {
+	if usage == nil {
+		return
+	}
+	if usage.PromptTokens == 0 && usage.InputTokens > 0 {
+		usage.PromptTokens = usage.InputTokens
+	}
+	if usage.CompletionTokens == 0 && usage.OutputTokens > 0 {
+		usage.CompletionTokens = usage.OutputTokens
+	}
+	if usage.TotalTokens == 0 {
+		usage.TotalTokens = usage.PromptTokens + usage.CompletionTokens
+	}
+	if usage.InputTokens == 0 && usage.PromptTokens > 0 {
+		usage.InputTokens = usage.PromptTokens
+	}
+	if usage.OutputTokens == 0 && usage.CompletionTokens > 0 {
+		usage.OutputTokens = usage.CompletionTokens
+	}
+	if usage.InputTokensDetails != nil {
+		if usage.PromptTokensDetails.CachedTokens == 0 {
+			usage.PromptTokensDetails.CachedTokens = usage.InputTokensDetails.CachedTokens
+		}
+		if usage.PromptTokensDetails.TextTokens == 0 {
+			usage.PromptTokensDetails.TextTokens = usage.InputTokensDetails.TextTokens
+		}
+		if usage.PromptTokensDetails.AudioTokens == 0 {
+			usage.PromptTokensDetails.AudioTokens = usage.InputTokensDetails.AudioTokens
+		}
+		if usage.PromptTokensDetails.ImageTokens == 0 {
+			usage.PromptTokensDetails.ImageTokens = usage.InputTokensDetails.ImageTokens
+		}
+	}
+	if usage.OutputTokensDetails != nil {
+		if usage.CompletionTokenDetails.TextTokens == 0 {
+			usage.CompletionTokenDetails.TextTokens = usage.OutputTokensDetails.TextTokens
+		}
+		if usage.CompletionTokenDetails.AudioTokens == 0 {
+			usage.CompletionTokenDetails.AudioTokens = usage.OutputTokensDetails.AudioTokens
+		}
+		if usage.CompletionTokenDetails.ImageTokens == 0 {
+			usage.CompletionTokenDetails.ImageTokens = usage.OutputTokensDetails.ImageTokens
+		}
+		if usage.CompletionTokenDetails.ReasoningTokens == 0 {
+			usage.CompletionTokenDetails.ReasoningTokens = usage.OutputTokensDetails.ReasoningTokens
+		}
+	}
+}
+
 func OpenaiRealtimeHandler(c *gin.Context, info *relaycommon.RelayInfo) (*types.NewAPIError, *dto.RealtimeUsage) {
 	if info == nil || info.ClientWs == nil || info.TargetWs == nil {
 		return types.NewError(fmt.Errorf("invalid websocket connection"), types.ErrorCodeBadResponse), nil
@@ -578,15 +791,10 @@ func OpenaiHandlerWithUsage(c *gin.Context, info *relaycommon.RelayInfo, resp *h
 	// because the upstream has already consumed resources and returned content
 	// We should still perform billing even if parsing fails
 	// format
-	if usageResp.InputTokens > 0 {
-		usageResp.PromptTokens += usageResp.InputTokens
-	}
-	if usageResp.OutputTokens > 0 {
-		usageResp.CompletionTokens += usageResp.OutputTokens
-	}
-	if usageResp.InputTokensDetails != nil {
-		usageResp.PromptTokensDetails.ImageTokens += usageResp.InputTokensDetails.ImageTokens
-		usageResp.PromptTokensDetails.TextTokens += usageResp.InputTokensDetails.TextTokens
+	if imageUsage, ok := extractImageUsageFromBody(responseBody); ok {
+		usageResp.Usage = *imageUsage
+	} else {
+		normalizeImageUsage(&usageResp.Usage)
 	}
 	applyUsagePostProcessing(info, &usageResp.Usage, responseBody)
 	return &usageResp.Usage, nil
