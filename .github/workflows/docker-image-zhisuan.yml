@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   build_and_push:
-    name: Build & push latest to GHCR
+    name: Build & push latest + version tag to GHCR
     runs-on: ubuntu-latest
 
     permissions:
@@ -30,6 +30,12 @@ jobs:
 
       - name: Write VERSION
         run: echo "zhisuan-$(date +'%Y%m%d')-${GITHUB_SHA::7}" > VERSION
+
+      - name: Export image tags
+        run: |
+          VERSION="$(cat VERSION)"
+          echo "IMAGE_VERSION=$VERSION" >> $GITHUB_ENV
+          echo "IMAGE_BRANCH_TAG=dev-zhisuan" >> $GITHUB_ENV
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -53,7 +59,10 @@ jobs:
           context: .
           platforms: linux/amd64
           push: true
-          tags: ghcr.io/${{ env.GHCR_REPOSITORY }}:latest
+          tags: |
+            ghcr.io/${{ env.GHCR_REPOSITORY }}:latest
+            ghcr.io/${{ env.GHCR_REPOSITORY }}:${{ env.IMAGE_BRANCH_TAG }}
+            ghcr.io/${{ env.GHCR_REPOSITORY }}:${{ env.IMAGE_VERSION }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -65,4 +74,6 @@ jobs:
           echo "### Published image" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "ghcr.io/${GHCR_REPOSITORY}:latest" >> $GITHUB_STEP_SUMMARY
+          echo "ghcr.io/${GHCR_REPOSITORY}:${IMAGE_BRANCH_TAG}" >> $GITHUB_STEP_SUMMARY
+          echo "ghcr.io/${GHCR_REPOSITORY}:${IMAGE_VERSION}" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY

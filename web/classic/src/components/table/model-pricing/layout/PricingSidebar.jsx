@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React from 'react';
-import { Divider } from '@douyinfe/semi-ui';
+import PricingGroups from '../filter/PricingGroups';
 import PricingTags from '../filter/PricingTags';
 import PricingEndpointTypes from '../filter/PricingEndpointTypes';
 import { usePricingFilterCounts } from '../../../../hooks/model-pricing/usePricingFilterCounts';
@@ -57,6 +57,7 @@ const PricingSidebar = ({
     vendorModels,
     tagModels,
     endpointTypeModels,
+    groupCountModels,
   } = usePricingFilterCounts({
     models: categoryProps.models,
     filterGroup,
@@ -68,6 +69,11 @@ const PricingSidebar = ({
   });
 
   const handleResetAll = () => {
+    if (typeof handleGroupClick === 'function') {
+      handleGroupClick('all');
+    } else {
+      setFilterGroup('all');
+    }
     setFilterEndpointType('all');
     setFilterTag('all');
   };
@@ -92,6 +98,16 @@ const PricingSidebar = ({
           setFilterEndpointType={setFilterEndpointType}
           models={endpointTypeModels || vendorModels}
           allModels={categoryProps.models}
+          loading={loading}
+          t={t}
+        />
+
+        <PricingGroups
+          filterGroup={filterGroup}
+          setFilterGroup={handleGroupClick || setFilterGroup}
+          usableGroup={categoryProps.usableGroup}
+          groupRatio={categoryProps.groupRatio}
+          models={groupCountModels}
           loading={loading}
           t={t}
         />

@@ -1215,6 +1215,33 @@ html.dark .with-pastel-balls::before {
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
+/* 图片操练场 prompt 输入条 */
+.image-playground-prompt.semi-input-textarea-wrapper,
+.image-playground-prompt .semi-input-textarea-wrapper {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  min-height: 32px !important;
+}
+
+.image-playground-prompt.semi-input-textarea-wrapper textarea,
+.image-playground-prompt .semi-input-textarea-wrapper textarea,
+.image-playground-prompt.semi-input-textarea-wrapper .semi-input,
+.image-playground-prompt .semi-input-textarea-wrapper .semi-input {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  min-height: 32px !important;
+  resize: none !important;
+}
+
+.image-playground-prompt textarea::placeholder,
+.image-playground-prompt .semi-input::placeholder {
+  color: var(--semi-color-text-3);
+}
+
 /* 弹窗 → 16px 圆角 */
 .semi-modal-content {
   border-radius: 16px !important;
