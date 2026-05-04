@@ -222,8 +222,12 @@ const ScrollableContainer = forwardRef(
       >
         <div
           ref={scrollRef}
-          className={`overflow-y-auto card-content-scroll ${contentClassName}`}
-          style={containerStyle}
+          className={`overflow-y-auto ${contentClassName}`}
+          style={{
+            ...containerStyle,
+            scrollbarWidth: 'thin',
+            scrollbarColor: 'rgba(0,0,0,0.15) transparent',
+          }}
           onScroll={handleScroll}
         >
           {children}

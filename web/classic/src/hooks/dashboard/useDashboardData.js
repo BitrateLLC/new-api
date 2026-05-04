@@ -93,7 +93,7 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
   const uptimeEnabled = statusState?.status?.uptime_kuma_enabled ?? true;
 
   const hasApiInfoPanel = apiInfoEnabled;
-  const hasInfoPanels = announcementsEnabled || faqEnabled || uptimeEnabled;
+  const hasInfoPanels = announcementsEnabled || uptimeEnabled;
 
   // ========== Memoized Values ==========
   const timeOptions = useMemo(
@@ -188,6 +188,9 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
         showError(message);
         return [];
       }
+    } catch (err) {
+      console.error('Failed to load quota data:', err);
+      return [];
     } finally {
       setLoading(false);
     }
@@ -213,34 +216,17 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     }
   }, [activeUptimeTab]);
 
-  const loadUserQuotaData = useCallback(async () => {
-    if (!isAdminUser) return [];
+  const getUserData = useCallback(async () => {
     try {
-      const { start_timestamp, end_timestamp } = inputs;
-      const localStartTimestamp = Date.parse(start_timestamp) / 1000;
-      const localEndTimestamp = Date.parse(end_timestamp) / 1000;
-      const url = `/api/data/users?start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}`;
-      const res = await API.get(url);
+      let res = await API.get(`/api/user/self`);
       const { success, message, data } = res.data;
       if (success) {
-        return data || [];
+        userDispatch({ type: 'login', payload: data });
       } else {
         showError(message);
-        return [];
       }
     } catch (err) {
-      console.error(err);
-      return [];
-    }
-  }, [inputs, isAdminUser]);
-
-  const getUserData = useCallback(async () => {
-    let res = await API.get(`/api/user/self`);
-    const { success, message, data } = res.data;
-    if (success) {
-      userDispatch({ type: 'login', payload: data });
-    } else {
-      showError(message);
+      console.error('Failed to get user data:', err);
     }
   }, [userDispatch]);
 
@@ -332,7 +318,6 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     showSearchModal,
     handleCloseModal,
     loadQuotaData,
-    loadUserQuotaData,
     loadUptimeData,
     getUserData,
     refresh,

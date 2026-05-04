@@ -37,6 +37,7 @@ import { IconSearch } from '@douyinfe/semi-icons';
 import { API, timestamp2string } from '../../../helpers';
 import { isAdmin } from '../../../helpers/utils';
 import { useIsMobile } from '../../../hooks/common/useIsMobile';
+
 const { Text } = Typography;
 
 // 状态映射配置
@@ -45,6 +46,30 @@ const STATUS_CONFIG = {
   pending: { type: 'warning', key: '待支付' },
   failed: { type: 'danger', key: '失败' },
   expired: { type: 'danger', key: '已过期' },
+};
+
+// 状态标签样式映射 — 使用语义色，暗色模式下透明度自然适配
+const STATUS_STYLE = {
+  success: {
+    background: 'rgba(52, 199, 89, 0.12)',
+    color: '#34c759',
+    border: '1px solid rgba(52, 199, 89, 0.25)',
+  },
+  pending: {
+    background: 'rgba(255, 159, 10, 0.12)',
+    color: '#ff9f0a',
+    border: '1px solid rgba(255, 159, 10, 0.25)',
+  },
+  failed: {
+    background: 'rgba(255, 59, 48, 0.12)',
+    color: '#ff3b30',
+    border: '1px solid rgba(255, 59, 48, 0.25)',
+  },
+  expired: {
+    background: 'rgba(255, 59, 48, 0.08)',
+    color: '#ff3b30',
+    border: '1px solid rgba(255, 59, 48, 0.18)',
+  },
 };
 
 // 支付方式映射
@@ -56,6 +81,135 @@ const PAYMENT_METHOD_MAP = {
   wxpay: '微信',
 };
 
+// ─── CSS 注入 ────────────────────────────────────────────────────────────────
+const INJECTED_STYLES = `
+  /* Modal 容器 */
+  .topup-history-modal .semi-modal-content {
+    border-radius: 16px !important;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18), 0 4px 16px rgba(0, 0, 0, 0.08) !important;
+  }
+
+  .topup-history-modal .semi-modal-header {
+    padding: 22px 24px 0 24px !important;
+    border-bottom: none !important;
+    background: transparent !important;
+  }
+
+  .topup-history-modal .semi-modal-title {
+    font-size: 17px !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.02em !important;
+    color: var(--hp-text, var(--semi-color-text-0)) !important;
+  }
+
+  .topup-history-modal .semi-modal-body {
+    padding: 16px 24px 24px 24px !important;
+  }
+
+  .topup-history-modal .semi-modal-footer {
+    border-top: none !important;
+    padding: 0 !important;
+  }
+
+  /* 搜索框 */
+  .topup-history-modal .semi-input-wrapper {
+    border-radius: 10px !important;
+    background: var(--hp-surface-2, var(--semi-color-fill-0)) !important;
+    transition: all 0.2s ease !important;
+  }
+
+  .topup-history-modal .semi-input-wrapper:focus-within {
+    box-shadow: 0 0 0 3px var(--hp-focus-ring, rgba(0, 122, 255, 0.15)) !important;
+    border-color: var(--hp-primary, #007aff) !important;
+  }
+
+  /* 表头 */
+  .topup-history-modal .semi-table-thead th {
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.04em !important;
+    text-transform: uppercase !important;
+    color: var(--hp-sub, var(--semi-color-text-2)) !important;
+    background: transparent !important;
+    border-bottom: 1px solid var(--hp-border, var(--semi-color-border)) !important;
+    padding: 8px 12px !important;
+  }
+
+  /* 表格行 */
+  .topup-history-modal .semi-table-tbody .semi-table-row {
+    transition: background-color 0.2s ease !important;
+  }
+
+  .topup-history-modal .semi-table-tbody .semi-table-row:hover td {
+    background-color: var(--hp-surface-hover, rgba(0, 122, 255, 0.04)) !important;
+  }
+
+  .topup-history-modal .semi-table-tbody td {
+    border-bottom: 1px solid var(--hp-border, var(--semi-color-border)) !important;
+    padding: 11px 12px !important;
+    transition: background-color 0.2s ease !important;
+  }
+
+  /* 最后一行去掉底线 */
+  .topup-history-modal .semi-table-tbody .semi-table-row:last-child td {
+    border-bottom: none !important;
+  }
+
+  /* 分页 */
+  .topup-history-modal .semi-page-item {
+    border-radius: 8px !important;
+    transition: all 0.2s ease !important;
+  }
+
+  /* 所有按钮 */
+  .topup-history-modal .semi-button {
+    transition: all 0.2s ease !important;
+  }
+
+  /* 暗色模式 hover */
+  [data-theme='dark'] .topup-history-modal .semi-table-tbody .semi-table-row:hover td,
+  .semi-always-dark .topup-history-modal .semi-table-tbody .semi-table-row:hover td {
+    background-color: var(--hp-surface-hover, rgba(255, 255, 255, 0.05)) !important;
+  }
+`;
+
+// ─── 子组件：状态标签 ─────────────────────────────────────────────────────────
+const StatusTag = ({ status, label }) => {
+  const tagStyle = STATUS_STYLE[status] || {
+    background: 'var(--hp-surface-2, rgba(0,0,0,0.06))',
+    color: 'var(--hp-text, var(--semi-color-text-0))',
+    border: '1px solid var(--hp-border, rgba(0,0,0,0.1))',
+  };
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '5px',
+        padding: '3px 9px',
+        borderRadius: '6px',
+        fontSize: '12px',
+        fontWeight: 500,
+        transition: 'all 0.2s ease',
+        ...tagStyle,
+      }}
+    >
+      <span
+        style={{
+          width: 6,
+          height: 6,
+          borderRadius: '50%',
+          background: tagStyle.color,
+          flexShrink: 0,
+        }}
+      />
+      {label}
+    </span>
+  );
+};
+
+// ─── 主组件 ───────────────────────────────────────────────────────────────────
 const TopupHistoryModal = ({ visible, onCancel, t }) => {
   const [loading, setLoading] = useState(false);
   const [topups, setTopups] = useState([]);
@@ -72,8 +226,7 @@ const TopupHistoryModal = ({ visible, onCancel, t }) => {
       const qs =
         `p=${currentPage}&page_size=${currentPageSize}` +
         (keyword ? `&keyword=${encodeURIComponent(keyword)}` : '');
-      const endpoint = `${base}?${qs}`;
-      const res = await API.get(endpoint);
+      const res = await API.get(`${base}?${qs}`);
       const { success, message, data } = res.data;
       if (success) {
         setTopups(data.items || []);
@@ -81,7 +234,7 @@ const TopupHistoryModal = ({ visible, onCancel, t }) => {
       } else {
         Toast.error({ content: message || t('加载失败') });
       }
-    } catch (error) {
+    } catch {
       Toast.error({ content: t('加载账单失败') });
     } finally {
       setLoading(false);
@@ -89,31 +242,17 @@ const TopupHistoryModal = ({ visible, onCancel, t }) => {
   };
 
   useEffect(() => {
-    if (visible) {
-      loadTopups(page, pageSize);
-    }
+    if (visible) loadTopups(page, pageSize);
   }, [visible, page, pageSize, keyword]);
 
-  const handlePageChange = (currentPage) => {
-    setPage(currentPage);
-  };
-
-  const handlePageSizeChange = (currentPageSize) => {
-    setPageSize(currentPageSize);
-    setPage(1);
-  };
-
-  const handleKeywordChange = (value) => {
-    setKeyword(value);
-    setPage(1);
-  };
+  const handlePageChange = (p) => setPage(p);
+  const handlePageSizeChange = (ps) => { setPageSize(ps); setPage(1); };
+  const handleKeywordChange = (v) => { setKeyword(v); setPage(1); };
 
   // 管理员补单
   const handleAdminComplete = async (tradeNo) => {
     try {
-      const res = await API.post('/api/user/topup/complete', {
-        trade_no: tradeNo,
-      });
+      const res = await API.post('/api/user/topup/complete', { trade_no: tradeNo });
       const { success, message } = res.data;
       if (success) {
         Toast.success({ content: t('补单成功') });
@@ -121,7 +260,7 @@ const TopupHistoryModal = ({ visible, onCancel, t }) => {
       } else {
         Toast.error({ content: message || t('补单失败') });
       }
-    } catch (e) {
+    } catch {
       Toast.error({ content: t('补单失败') });
     }
   };
@@ -134,54 +273,50 @@ const TopupHistoryModal = ({ visible, onCancel, t }) => {
     });
   };
 
-  // 渲染状态徽章
-  const renderStatusBadge = (status) => {
-    const config = STATUS_CONFIG[status] || { type: 'primary', key: status };
-    return (
-      <span className='flex items-center gap-2'>
-        <Badge dot type={config.type} />
-        <span>{t(config.key)}</span>
-      </span>
-    );
-  };
-
-  // 渲染支付方式
-  const renderPaymentMethod = (pm) => {
-    const displayName = PAYMENT_METHOD_MAP[pm];
-    return <Text>{displayName ? t(displayName) : pm || '-'}</Text>;
-  };
-
   const isSubscriptionTopup = (record) => {
     const tradeNo = (record?.trade_no || '').toLowerCase();
     return Number(record?.amount || 0) === 0 && tradeNo.startsWith('sub');
   };
 
-  // 检查是否为管理员
   const userIsAdmin = useMemo(() => isAdmin(), []);
 
   const columns = useMemo(() => {
-    const baseColumns = [
-      ...(userIsAdmin
-        ? [
-            {
-              title: t('用户ID'),
-              dataIndex: 'user_id',
-              key: 'user_id',
-              render: (userId) => <Text>{userId ?? '-'}</Text>,
-            },
-          ]
-        : []),
+    const cols = [
       {
         title: t('订单号'),
         dataIndex: 'trade_no',
         key: 'trade_no',
-        render: (text) => <Text copyable>{text}</Text>,
+        render: (text) => (
+          <Text
+            copyable
+            style={{
+              fontSize: '12px',
+              fontFamily: 'ui-monospace, "SF Mono", "Menlo", monospace',
+              color: 'var(--hp-sub, var(--semi-color-text-2))',
+            }}
+          >
+            {text}
+          </Text>
+        ),
       },
       {
         title: t('支付方式'),
         dataIndex: 'payment_method',
         key: 'payment_method',
-        render: renderPaymentMethod,
+        render: (pm) => {
+          const displayName = PAYMENT_METHOD_MAP[pm];
+          return (
+            <span
+              style={{
+                fontSize: '13px',
+                fontWeight: 500,
+                color: 'var(--hp-text, var(--semi-color-text-0))',
+              }}
+            >
+              {displayName ? t(displayName) : pm || '—'}
+            </span>
+          );
+        },
       },
       {
         title: t('充值额度'),
@@ -190,15 +325,37 @@ const TopupHistoryModal = ({ visible, onCancel, t }) => {
         render: (amount, record) => {
           if (isSubscriptionTopup(record)) {
             return (
-              <Tag color='purple' shape='circle' size='small'>
+              <Tag
+                color='purple'
+                shape='circle'
+                size='small'
+                style={{ borderRadius: '6px', transition: 'all 0.2s ease' }}
+              >
                 {t('订阅套餐')}
               </Tag>
             );
           }
           return (
-            <span className='flex items-center gap-1'>
-              <Coins size={16} />
-              <Text>{amount}</Text>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+              <Coins
+                size={14}
+                style={{
+                  color: 'var(--hp-sub, var(--semi-color-text-2))',
+                  flexShrink: 0,
+                  transition: 'all 0.2s ease',
+                }}
+              />
+              <span
+                style={{
+                  fontWeight: 600,
+                  fontSize: '14px',
+                  fontVariantNumeric: 'tabular-nums',
+                  letterSpacing: '-0.01em',
+                  color: 'var(--hp-text, var(--semi-color-text-0))',
+                }}
+              >
+                {amount}
+              </span>
             </span>
           );
         },
@@ -207,95 +364,139 @@ const TopupHistoryModal = ({ visible, onCancel, t }) => {
         title: t('支付金额'),
         dataIndex: 'money',
         key: 'money',
-        render: (money) => <Text type='danger'>¥{money.toFixed(2)}</Text>,
+        render: (money) => (
+          <span
+            style={{
+              fontWeight: 700,
+              fontSize: '14px',
+              fontVariantNumeric: 'tabular-nums',
+              letterSpacing: '-0.02em',
+              color: '#ff3b30',
+            }}
+          >
+            ¥{money.toFixed(2)}
+          </span>
+        ),
       },
       {
         title: t('状态'),
         dataIndex: 'status',
         key: 'status',
-        render: renderStatusBadge,
+        render: (status) => {
+          const config = STATUS_CONFIG[status] || { key: status };
+          return <StatusTag status={status} label={t(config.key)} />;
+        },
       },
     ];
 
-    // 管理员才显示操作列
     if (userIsAdmin) {
-      baseColumns.push({
+      cols.push({
         title: t('操作'),
         key: 'action',
-        render: (_, record) => {
-          const actions = [];
-          if (record.status === 'pending') {
-            actions.push(
-              <Button
-                key="complete"
-                size='small'
-                type='primary'
-                theme='outline'
-                onClick={() => confirmAdminComplete(record.trade_no)}
-              >
-                {t('补单')}
-              </Button>
-            );
-          }
-          return actions.length > 0 ? <>{actions}</> : null;
-        },
+        render: (_, record) =>
+          record.status === 'pending' ? (
+            <Button
+              size='small'
+              type='primary'
+              theme='outline'
+              style={{
+                borderRadius: '8px',
+                fontSize: '12px',
+                fontWeight: 500,
+                transition: 'all 0.2s ease',
+              }}
+              onClick={() => confirmAdminComplete(record.trade_no)}
+            >
+              {t('补单')}
+            </Button>
+          ) : null,
       });
     }
 
-    baseColumns.push({
+    cols.push({
       title: t('创建时间'),
       dataIndex: 'create_time',
       key: 'create_time',
-      render: (time) => timestamp2string(time),
+      render: (time) => (
+        <span
+          style={{
+            fontSize: '12px',
+            color: 'var(--hp-sub, var(--semi-color-text-2))',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {timestamp2string(time)}
+        </span>
+      ),
     });
 
-    return baseColumns;
+    return cols;
   }, [t, userIsAdmin]);
 
   return (
-    <Modal
-      title={t('充值账单')}
-      visible={visible}
-      onCancel={onCancel}
-      footer={null}
-      size={isMobile ? 'full-width' : 'large'}
-    >
-      <div className='mb-3'>
-        <Input
-          prefix={<IconSearch />}
-          placeholder={t('订单号')}
-          value={keyword}
-          onChange={handleKeywordChange}
-          showClear
-        />
-      </div>
-      <Table
-        columns={columns}
-        dataSource={topups}
-        loading={loading}
-        rowKey='id'
-        pagination={{
-          currentPage: page,
-          pageSize: pageSize,
-          total: total,
-          showSizeChanger: true,
-          pageSizeOpts: [10, 20, 50, 100],
-          onPageChange: handlePageChange,
-          onPageSizeChange: handlePageSizeChange,
-        }}
-        size='small'
-        empty={
-          <Empty
-            image={<IllustrationNoResult style={{ width: 150, height: 150 }} />}
-            darkModeImage={
-              <IllustrationNoResultDark style={{ width: 150, height: 150 }} />
+    <>
+      <style>{INJECTED_STYLES}</style>
+      <Modal
+        className='topup-history-modal'
+        title={t('充值账单')}
+        visible={visible}
+        onCancel={onCancel}
+        footer={null}
+        size={isMobile ? 'full-width' : 'large'}
+      >
+        {/* 搜索框 */}
+        <div style={{ marginBottom: 16 }}>
+          <Input
+            prefix={
+              <IconSearch
+                style={{ color: 'var(--hp-sub, var(--semi-color-text-2))' }}
+              />
             }
-            description={t('暂无充值记录')}
-            style={{ padding: 30 }}
+            placeholder={t('订单号')}
+            value={keyword}
+            onChange={handleKeywordChange}
+            showClear
           />
-        }
-      />
-    </Modal>
+        </div>
+
+        {/* 表格 */}
+        <Table
+          columns={columns}
+          dataSource={topups}
+          loading={loading}
+          rowKey='id'
+          pagination={{
+            currentPage: page,
+            pageSize,
+            total,
+            showSizeChanger: true,
+            pageSizeOpts: [10, 20, 50, 100],
+            onPageChange: handlePageChange,
+            onPageSizeChange: handlePageSizeChange,
+          }}
+          size='small'
+          empty={
+            <Empty
+              image={<IllustrationNoResult style={{ width: 140, height: 140 }} />}
+              darkModeImage={
+                <IllustrationNoResultDark style={{ width: 140, height: 140 }} />
+              }
+              description={
+                <span
+                  style={{
+                    color: 'var(--hp-sub, var(--semi-color-text-2))',
+                    fontSize: '13px',
+                  }}
+                >
+                  {t('暂无充值记录')}
+                </span>
+              }
+              style={{ padding: '28px 0' }}
+            />
+          }
+        />
+      </Modal>
+    </>
   );
 };
 

@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   API,
   getLogo,
@@ -26,7 +26,7 @@ import {
   showSuccess,
   getSystemName,
 } from '../../helpers';
-import Turnstile from 'react-turnstile';
+import { useActualTheme } from '../../context/Theme';
 import { Button, Card, Form, Typography } from '@douyinfe/semi-ui';
 import { IconMail } from '@douyinfe/semi-icons';
 import { Link } from 'react-router-dom';
@@ -48,7 +48,8 @@ const PasswordResetForm = () => {
   const [disableButton, setDisableButton] = useState(false);
   const [countdown, setCountdown] = useState(30);
 
-  const logo = getLogo();
+  const actualTheme = useActualTheme();
+  const logo = useMemo(() => getLogo(), [actualTheme]);
   const systemName = getSystemName();
 
   useEffect(() => {
@@ -90,17 +91,22 @@ const PasswordResetForm = () => {
     }
     setDisableButton(true);
     setLoading(true);
-    const res = await API.get(
-      `/api/reset_password?email=${email}&turnstile=${turnstileToken}`,
-    );
-    const { success, message } = res.data;
-    if (success) {
-      showSuccess(t('重置邮件发送成功，请检查邮箱！'));
-      setInputs({ ...inputs, email: '' });
-    } else {
-      showError(message);
+    try {
+      const res = await API.get(
+        `/api/reset_password?email=${email}&turnstile=${turnstileToken}`,
+      );
+      const { success, message } = res.data;
+      if (success) {
+        showSuccess(t('重置邮件发送成功，请检查邮箱！'));
+        setInputs({ ...inputs, email: '' });
+      } else {
+        showError(message);
+      }
+    } catch (err) {
+      console.error('Failed to send reset email:', err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   return (
@@ -164,7 +170,7 @@ const PasswordResetForm = () => {
                     {t('想起来了？')}{' '}
                     <Link
                       to='/login'
-                      className='text-blue-600 hover:text-blue-800 font-medium'
+                      className='text-orange-600 hover:text-orange-800 font-medium'
                     >
                       {t('登录')}
                     </Link>

@@ -36,11 +36,11 @@ const codeThemeStyles = {
     fontFamily: 'Consolas, "Courier New", Monaco, "SF Mono", monospace',
     fontSize: '13px',
     lineHeight: '1.4',
-    borderRadius: '8px',
+    borderRadius: '12px',
     border: '1px solid #3c3c3c',
     position: 'relative',
     overflow: 'hidden',
-    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)',
   },
   content: {
     height: '100%',

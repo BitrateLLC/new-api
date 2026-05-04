@@ -123,11 +123,23 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 		imageN = *request.N
 	}
 
-	if usage.(*dto.Usage).TotalTokens == 0 {
-		usage.(*dto.Usage).TotalTokens = 1
+	// n is handled via OtherRatio so it is applied exactly once in quota
+	// calculation (both price-based and ratio-based paths).
+	// Adaptors may have already set a more accurate count from the
+	// upstream response; only set the default when they haven't.
+	if info.PriceData.UsePrice { // only price model use N ratio
+		if !info.PriceData.HasOtherRatio("n") {
+			info.PriceData.AddOtherRatio("n", float64(imageN))
+		}
 	}
-	if usage.(*dto.Usage).PromptTokens == 0 {
-		usage.(*dto.Usage).PromptTokens = 1
+
+	imageUsage := usage.(*dto.Usage)
+	normalizeImageUsageForLog(imageUsage)
+	if imageUsage.TotalTokens == 0 {
+		imageUsage.TotalTokens = 1
+	}
+	if imageUsage.PromptTokens == 0 {
+		imageUsage.PromptTokens = 1
 	}
 
 	quality := request.Quality
@@ -147,6 +159,55 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 		logContent = append(logContent, fmt.Sprintf("生成数量 %d", imageN))
 	}
 
-	service.PostTextConsumeQuota(c, info, usage.(*dto.Usage), logContent)
+	service.PostTextConsumeQuota(c, info, imageUsage, logContent)
 	return nil
+}
+
+func normalizeImageUsageForLog(usage *dto.Usage) {
+	if usage == nil {
+		return
+	}
+	if usage.PromptTokens == 0 && usage.InputTokens > 0 {
+		usage.PromptTokens = usage.InputTokens
+	}
+	if usage.CompletionTokens == 0 && usage.OutputTokens > 0 {
+		usage.CompletionTokens = usage.OutputTokens
+	}
+	if usage.TotalTokens == 0 {
+		usage.TotalTokens = usage.PromptTokens + usage.CompletionTokens
+	}
+	if usage.InputTokens == 0 && usage.PromptTokens > 0 {
+		usage.InputTokens = usage.PromptTokens
+	}
+	if usage.OutputTokens == 0 && usage.CompletionTokens > 0 {
+		usage.OutputTokens = usage.CompletionTokens
+	}
+	if usage.InputTokensDetails != nil {
+		if usage.PromptTokensDetails.CachedTokens == 0 {
+			usage.PromptTokensDetails.CachedTokens = usage.InputTokensDetails.CachedTokens
+		}
+		if usage.PromptTokensDetails.TextTokens == 0 {
+			usage.PromptTokensDetails.TextTokens = usage.InputTokensDetails.TextTokens
+		}
+		if usage.PromptTokensDetails.AudioTokens == 0 {
+			usage.PromptTokensDetails.AudioTokens = usage.InputTokensDetails.AudioTokens
+		}
+		if usage.PromptTokensDetails.ImageTokens == 0 {
+			usage.PromptTokensDetails.ImageTokens = usage.InputTokensDetails.ImageTokens
+		}
+	}
+	if usage.OutputTokensDetails != nil {
+		if usage.CompletionTokenDetails.TextTokens == 0 {
+			usage.CompletionTokenDetails.TextTokens = usage.OutputTokensDetails.TextTokens
+		}
+		if usage.CompletionTokenDetails.AudioTokens == 0 {
+			usage.CompletionTokenDetails.AudioTokens = usage.OutputTokensDetails.AudioTokens
+		}
+		if usage.CompletionTokenDetails.ImageTokens == 0 {
+			usage.CompletionTokenDetails.ImageTokens = usage.OutputTokensDetails.ImageTokens
+		}
+		if usage.CompletionTokenDetails.ReasoningTokens == 0 {
+			usage.CompletionTokenDetails.ReasoningTokens = usage.OutputTokensDetails.ReasoningTokens
+		}
+	}
 }

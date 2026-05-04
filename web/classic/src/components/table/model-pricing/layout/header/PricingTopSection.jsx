@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 
 import React, { useState, memo } from 'react';
 import PricingFilterModal from '../../modal/PricingFilterModal';
-import PricingVendorIntroWithSkeleton from './PricingVendorIntroWithSkeleton';
+import PricingVendorIntro from './PricingVendorIntro';
 import SearchActions from './SearchActions';
 
 const PricingTopSection = memo(
@@ -34,6 +34,8 @@ const PricingTopSection = memo(
     filterVendor,
     models,
     filteredModels,
+    currentPage,
+    pageSize,
     loading,
     searchValue,
     showWithRecharge,
@@ -55,7 +57,19 @@ const PricingTopSection = memo(
       <>
         {isMobile ? (
           <>
-            <div className='w-full'>
+            <div className='pricing-mobile-header'>
+              <div className='pricing-mobile-header-title-row'>
+                <div className='pricing-mobile-header-title'>
+                  {filterVendor && filterVendor !== 'all'
+                    ? filterVendor
+                    : t('模型广场')}
+                </div>
+                <div className='pricing-mobile-header-count'>
+                  {t('共 {{count}} 个模型', {
+                    count: filteredModels?.length ?? 0,
+                  })}
+                </div>
+              </div>
               <SearchActions
                 selectedRowKeys={selectedRowKeys}
                 copyText={copyText}
@@ -87,9 +101,8 @@ const PricingTopSection = memo(
             />
           </>
         ) : (
-          <PricingVendorIntroWithSkeleton
-            loading={loading}
-            filterVendor={filterVendor}
+          <PricingVendorIntro
+            filterVendor={filterVendor || sidebarProps?.filterVendor}
             models={filteredModels}
             allModels={models}
             t={t}
@@ -105,7 +118,6 @@ const PricingTopSection = memo(
             setShowWithRecharge={setShowWithRecharge}
             currency={currency}
             setCurrency={setCurrency}
-            siteDisplayType={siteDisplayType}
             showRatio={showRatio}
             setShowRatio={setShowRatio}
             viewMode={viewMode}

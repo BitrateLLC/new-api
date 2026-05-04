@@ -21,10 +21,8 @@ import HeaderBar from './headerbar';
 import { Layout } from '@douyinfe/semi-ui';
 import SiderBar from './SiderBar';
 import App from '../../App';
-import FooterBar from './Footer';
-import ClassicFrontendDeprecationBanner from './ClassicFrontendDeprecationBanner';
+// Footer removed
 import { ToastContainer } from 'react-toastify';
-import ErrorBoundary from '../common/ErrorBoundary';
 import React, { useContext, useEffect, useState } from 'react';
 import { useIsMobile } from '../../hooks/common/useIsMobile';
 import { useSidebarCollapsed } from '../../hooks/common/useSidebarCollapsed';
@@ -38,11 +36,13 @@ import {
 } from '../../helpers';
 import { UserContext } from '../../context/User';
 import { StatusContext } from '../../context/Status';
+import { useActualTheme } from '../../context/Theme';
 import { useLocation } from 'react-router-dom';
 import { normalizeLanguage } from '../../i18n/language';
 const { Sider, Content, Header } = Layout;
 
 const PageLayout = () => {
+  const actualTheme = useActualTheme();
   const [userState, userDispatch] = useContext(UserContext);
   const [, statusDispatch] = useContext(StatusContext);
   const isMobile = useIsMobile();
@@ -51,28 +51,14 @@ const PageLayout = () => {
   const { i18n } = useTranslation();
   const location = useLocation();
 
-  const cardProPages = [
-    '/console/channel',
-    '/console/log',
-    '/console/redemption',
-    '/console/user',
-    '/console/token',
-    '/console/midjourney',
-    '/console/task',
-    '/console/models',
-    '/pricing',
-  ];
-
-  const shouldHideFooter = cardProPages.includes(location.pathname);
-
   const shouldInnerPadding =
     location.pathname.includes('/console') &&
     !location.pathname.startsWith('/console/chat') &&
-    location.pathname !== '/console/playground';
+    location.pathname !== '/console/playground' &&
+    location.pathname !== '/console/image-playground';
 
   const isConsoleRoute = location.pathname.startsWith('/console');
   const showSider = isConsoleRoute && (!isMobile || drawerOpen);
-  const isFixedLayout = isConsoleRoute || location.pathname === '/pricing';
 
   useEffect(() => {
     if (isMobile && drawerOpen && collapsed) {
@@ -97,9 +83,11 @@ const PageLayout = () => {
         setStatusData(data);
       } else {
         showError('Unable to connect to server');
+        statusDispatch({ type: 'set', payload: {} });
       }
     } catch (error) {
       showError('Failed to load status');
+      statusDispatch({ type: 'set', payload: {} });
     }
   };
 
@@ -118,6 +106,16 @@ const PageLayout = () => {
       }
     }
   }, []);
+
+  useEffect(() => {
+    let logo = getLogo();
+    if (logo) {
+      let linkElement = document.querySelector("link[rel~='icon']");
+      if (linkElement) {
+        linkElement.href = logo;
+      }
+    }
+  }, [actualTheme]);
 
   useEffect(() => {
     let preferredLang;
@@ -148,13 +146,16 @@ const PageLayout = () => {
 
   return (
     <Layout
-      className={`app-layout${isFixedLayout ? ' app-layout-fixed' : ''}`}
+      className='app-layout'
       style={{
         display: 'flex',
         flexDirection: 'column',
-        overflow: isFixedLayout && !isMobile ? 'hidden' : 'visible',
+        height: '100vh',
+        overflow: 'hidden',
+        color: 'var(--hp-text)',
       }}
     >
+      {/* 导航栏：全宽置顶锁定 + 毛玻璃 */}
       <Header
         style={{
           padding: 0,
@@ -164,6 +165,10 @@ const PageLayout = () => {
           width: '100%',
           top: 0,
           zIndex: 100,
+          background: 'rgba(var(--hp-bg-rgb), 0.5)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          borderBottom: '1px solid var(--hp-border)',
         }}
       >
         <HeaderBar
@@ -171,25 +176,28 @@ const PageLayout = () => {
           drawerOpen={drawerOpen}
         />
       </Header>
+
+      {/* 导航栏下方区域：侧边栏 + 内容（不加 paddingTop，让内容可以滚到 Header 下方触发毛玻璃） */}
       <Layout
         style={{
-          overflow: isFixedLayout && !isMobile ? 'auto' : 'visible',
-          display: 'flex',
-          flexDirection: 'column',
           flex: '1 1 auto',
+          display: 'flex',
+          flexDirection: 'row',
+          overflow: 'hidden',
         }}
       >
         {showSider && (
           <Sider
             className='app-sider'
             style={{
-              position: 'fixed',
-              left: 0,
-              top: '64px',
-              zIndex: 99,
+              flexShrink: 0,
+              width: 'var(--sidebar-current-width)',
               border: 'none',
               paddingRight: '0',
-              width: 'var(--sidebar-current-width)',
+              paddingTop: '64px',
+              overflow: 'hidden',
+              zIndex: 100,
+              background: 'transparent',
             }}
           >
             <SiderBar
@@ -201,43 +209,29 @@ const PageLayout = () => {
         )}
         <Layout
           style={{
-            marginLeft: isMobile
-              ? '0'
-              : showSider
-                ? 'var(--sidebar-current-width)'
-                : '0',
             flex: '1 1 auto',
+            minWidth: 0,
             display: 'flex',
             flexDirection: 'column',
-            minHeight: 0,
+            overflow: 'hidden',
+            position: 'relative',
           }}
         >
-          <ClassicFrontendDeprecationBanner />
           <Content
-            className={isFixedLayout ? undefined : 'public-page-content'}
             style={{
-              flex: isFixedLayout ? '1 0 auto' : '1 1 auto',
-              overflowY: isFixedLayout && !isMobile ? 'hidden' : 'visible',
+              flex: '1 1 auto',
+              overflowY: 'auto',
               WebkitOverflowScrolling: 'touch',
-              padding: shouldInnerPadding ? (isMobile ? '5px' : '24px') : '0',
-              position: 'relative',
-              minHeight: 0,
+              paddingTop: `calc(64px + ${shouldInnerPadding ? (isMobile ? '5px' : '24px') : '0px'})`,
+              paddingLeft: shouldInnerPadding ? (isMobile ? '5px' : '24px') : '0',
+              paddingRight: shouldInnerPadding ? (isMobile ? '5px' : '24px') : '0',
+              paddingBottom: shouldInnerPadding ? (isMobile ? '5px' : '24px') : '0',
+              backgroundColor: 'var(--hp-bg)',
             }}
           >
-            <ErrorBoundary>
-              <App />
-            </ErrorBoundary>
+            <App />
           </Content>
-          {!shouldHideFooter && (
-            <Layout.Footer
-              style={{
-                flex: '0 0 auto',
-                width: '100%',
-              }}
-            >
-              <FooterBar />
-            </Layout.Footer>
-          )}
+          {/* Footer 已移除 - 不再渲染底部版权栏 */}
         </Layout>
       </Layout>
       <ToastContainer />

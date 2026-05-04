@@ -181,12 +181,28 @@ func GetAndValidOpenAIImageRequest(c *gin.Context, relayMode int) (*dto.ImageReq
 			}
 			imageRequest.Quality = formData.Get("quality")
 			imageRequest.Size = formData.Get("size")
+			imageRequest.ResponseFormat = formData.Get("response_format")
 			if streamValue := strings.TrimSpace(formData.Get("stream")); streamValue != "" {
 				stream, err := strconv.ParseBool(streamValue)
 				if err != nil {
 					return nil, fmt.Errorf("invalid stream value: %w", err)
 				}
 				imageRequest.Stream = common.GetPointer(stream)
+			}
+			if background := formData.Get("background"); background != "" {
+				imageRequest.Background, _ = common.Marshal(background)
+			}
+			if moderation := formData.Get("moderation"); moderation != "" {
+				imageRequest.Moderation, _ = common.Marshal(moderation)
+			}
+			if outputFormat := formData.Get("output_format"); outputFormat != "" {
+				imageRequest.OutputFormat, _ = common.Marshal(outputFormat)
+			}
+			if outputCompression := formData.Get("output_compression"); outputCompression != "" {
+				imageRequest.OutputCompression, _ = common.Marshal(common.String2Int(outputCompression))
+			}
+			if partialImages := formData.Get("partial_images"); partialImages != "" {
+				imageRequest.PartialImages, _ = common.Marshal(common.String2Int(partialImages))
 			}
 			if imageValue := formData.Get("image"); imageValue != "" {
 				imageRequest.Image, _ = common.Marshal(imageValue)

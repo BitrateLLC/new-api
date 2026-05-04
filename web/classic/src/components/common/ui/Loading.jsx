@@ -22,8 +22,34 @@ import { Spin } from '@douyinfe/semi-ui';
 
 const Loading = ({ size = 'small' }) => {
   return (
-    <div className='fixed inset-0 w-screen h-screen flex items-center justify-center'>
-      <Spin size={size} spinning={true} />
+    <div
+      className='fixed inset-0 w-screen h-screen flex flex-col items-center justify-center'
+      style={{
+        background: 'var(--hp-bg)',
+        zIndex: 9999,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 56,
+          height: 56,
+          borderRadius: '16px',
+          background: 'var(--hp-card)',
+          boxShadow: 'var(--hp-shadow-md)',
+          animation: 'loading-breathe 1.8s ease-in-out infinite',
+        }}
+      >
+        <Spin size={size} spinning={true} />
+      </div>
+      <style>{`
+        @keyframes loading-breathe {
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(0.96); opacity: 0.8; }
+        }
+      `}</style>
     </div>
   );
 };

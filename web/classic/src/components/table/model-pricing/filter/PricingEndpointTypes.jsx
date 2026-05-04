@@ -18,7 +18,34 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React from 'react';
+import { Layers3, Sigma, Sparkles, Video } from 'lucide-react';
 import SelectableButtonGroup from '../../../common/ui/SelectableButtonGroup';
+import { getLobeHubIcon } from '../../../../helpers';
+
+const getEndpointTypeIcon = (endpointType) => {
+  switch (endpointType) {
+    case 'all':
+      return <Layers3 size={14} />;
+    case 'openai':
+    case 'openai-response':
+    case 'openai-response-compact':
+      return getLobeHubIcon('OpenAI', 14);
+    case 'anthropic':
+      return getLobeHubIcon('Claude', 14);
+    case 'gemini':
+      return getLobeHubIcon('Gemini', 14);
+    case 'jina-rerank':
+      return getLobeHubIcon('Jina', 14);
+    case 'image-generation':
+      return <Sparkles size={14} />;
+    case 'embeddings':
+      return <Sigma size={14} />;
+    case 'openai-video':
+      return <Video size={14} />;
+    default:
+      return <Layers3 size={14} />;
+  }
+};
 
 /**
  * 端点类型筛选组件
@@ -76,6 +103,7 @@ const PricingEndpointTypes = ({
       value: 'all',
       label: t('全部端点'),
       tagCount: getEndpointTypeCount('all'),
+      icon: getEndpointTypeIcon('all'),
     },
     ...availableEndpointTypes.map((endpointType) => {
       const count = getEndpointTypeCount(endpointType);
@@ -83,13 +111,14 @@ const PricingEndpointTypes = ({
         value: endpointType,
         label: getEndpointTypeLabel(endpointType),
         tagCount: count,
+        icon: getEndpointTypeIcon(endpointType),
       };
     }),
   ];
 
   return (
     <SelectableButtonGroup
-      title={t('端点类型')}
+      title={t('大模型')}
       items={items}
       activeValue={filterEndpointType}
       onChange={setFilterEndpointType}

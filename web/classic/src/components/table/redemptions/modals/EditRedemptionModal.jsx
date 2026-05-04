@@ -25,12 +25,8 @@ import {
   showError,
   showSuccess,
   renderQuota,
-  getCurrencyConfig,
+  renderQuotaWithPrompt,
 } from '../../../../helpers';
-import {
-  quotaToDisplayAmount,
-  displayAmountToQuota,
-} from '../../../../helpers/quota';
 import { useIsMobile } from '../../../../hooks/common/useIsMobile';
 import {
   Button,
@@ -45,7 +41,6 @@ import {
   Avatar,
   Row,
   Col,
-  InputNumber,
 } from '@douyinfe/semi-ui';
 import {
   IconCreditCard,
@@ -62,12 +57,10 @@ const EditRedemptionModal = (props) => {
   const [loading, setLoading] = useState(isEdit);
   const isMobile = useIsMobile();
   const formApiRef = useRef(null);
-  const [showQuotaInput, setShowQuotaInput] = useState(false);
 
   const getInitValues = () => ({
     name: '',
     quota: 100000,
-    amount: Number(quotaToDisplayAmount(100000).toFixed(6)),
     count: 1,
     expired_time: null,
   });
@@ -78,20 +71,24 @@ const EditRedemptionModal = (props) => {
 
   const loadRedemption = async () => {
     setLoading(true);
-    let res = await API.get(`/api/redemption/${props.editingRedemption.id}`);
-    const { success, message, data } = res.data;
-    if (success) {
-      if (data.expired_time === 0) {
-        data.expired_time = null;
+    try {
+      let res = await API.get(`/api/redemption/${props.editingRedemption.id}`);
+      const { success, message, data } = res.data;
+      if (success) {
+        if (data.expired_time === 0) {
+          data.expired_time = null;
+        } else {
+          data.expired_time = new Date(data.expired_time * 1000);
+        }
+        formApiRef.current?.setValues({ ...getInitValues(), ...data });
       } else {
-        data.expired_time = new Date(data.expired_time * 1000);
+        showError(message);
       }
-      data.amount = Number(quotaToDisplayAmount(data.quota || 0).toFixed(6));
-      formApiRef.current?.setValues({ ...getInitValues(), ...data });
-    } else {
-      showError(message);
+    } catch (err) {
+      console.error('Failed to load redemption:', err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -110,67 +107,67 @@ const EditRedemptionModal = (props) => {
       name = renderQuota(values.quota);
     }
     setLoading(true);
-    let localInputs = { ...values };
-    localInputs.count = parseInt(localInputs.count) || 0;
-    localInputs.quota = displayAmountToQuota(localInputs.amount);
-    if (localInputs.quota <= 0) {
-      showError(t('请输入金额'));
-      setLoading(false);
-      return;
-    }
-    localInputs.name = name;
-    if (!localInputs.expired_time) {
-      localInputs.expired_time = 0;
-    } else {
-      localInputs.expired_time = Math.floor(
-        localInputs.expired_time.getTime() / 1000,
-      );
-    }
-    let res;
-    if (isEdit) {
-      res = await API.put(`/api/redemption/`, {
-        ...localInputs,
-        id: parseInt(props.editingRedemption.id),
-      });
-    } else {
-      res = await API.post(`/api/redemption/`, {
-        ...localInputs,
-      });
-    }
-    const { success, message, data } = res.data;
-    if (success) {
-      if (isEdit) {
-        showSuccess(t('兑换码更新成功！'));
-        props.refresh();
-        props.handleClose();
+    try {
+      let localInputs = { ...values };
+      localInputs.count = parseInt(localInputs.count) || 0;
+      localInputs.quota = parseInt(localInputs.quota) || 0;
+      localInputs.name = name;
+      if (!localInputs.expired_time) {
+        localInputs.expired_time = 0;
       } else {
-        showSuccess(t('兑换码创建成功！'));
-        props.refresh();
-        formApiRef.current?.setValues(getInitValues());
-        props.handleClose();
+        localInputs.expired_time = Math.floor(
+          localInputs.expired_time.getTime() / 1000,
+        );
       }
-    } else {
-      showError(message);
-    }
-    if (!isEdit && data) {
-      let text = '';
-      for (let i = 0; i < data.length; i++) {
-        text += data[i] + '\n';
+      let res;
+      if (isEdit) {
+        res = await API.put(`/api/redemption/`, {
+          ...localInputs,
+          id: parseInt(props.editingRedemption.id),
+        });
+      } else {
+        res = await API.post(`/api/redemption/`, {
+          ...localInputs,
+        });
       }
-      Modal.confirm({
-        title: t('兑换码创建成功'),
-        content: (
-          <div>
-            <p>{t('兑换码创建成功，是否下载兑换码？')}</p>
-            <p>{t('兑换码将以文本文件的形式下载，文件名为兑换码的名称。')}</p>
-          </div>
-        ),
-        onOk: () => {
-          downloadTextAsFile(text, `${localInputs.name}.txt`);
-        },
-      });
+      const { success, message, data } = res.data;
+      if (success) {
+        if (isEdit) {
+          showSuccess(t('兑换码更新成功！'));
+          props.refresh();
+          props.handleClose();
+        } else {
+          showSuccess(t('兑换码创建成功！'));
+          props.refresh();
+          formApiRef.current?.setValues(getInitValues());
+          props.handleClose();
+        }
+      } else {
+        showError(message);
+      }
+      if (!isEdit && data) {
+        let text = '';
+        for (let i = 0; i < data.length; i++) {
+          text += data[i] + '\n';
+        }
+        Modal.confirm({
+          title: t('兑换码创建成功'),
+          content: (
+            <div>
+              <p>{t('兑换码创建成功，是否下载兑换码？')}</p>
+              <p>{t('兑换码将以文本文件的形式下载，文件名为兑换码的名称。')}</p>
+            </div>
+          ),
+          onOk: () => {
+            downloadTextAsFile(text, `${localInputs.name}.txt`);
+          },
+        });
+      }
+    } catch (error) {
+      showError(error.message || t('操作失败'));
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
@@ -298,63 +295,37 @@ const EditRedemptionModal = (props) => {
                   </div>
 
                   <Row gutter={12}>
-                    <Col span={24}>
-                      <Form.InputNumber
-                        field='amount'
-                        label={t('金额')}
-                        prefix={getCurrencyConfig().symbol}
-                        placeholder={t('输入金额')}
-                        precision={6}
-                        min={0}
-                        step={0.000001}
+                    <Col span={12}>
+                      <Form.AutoComplete
+                        field='quota'
+                        label={t('额度')}
+                        placeholder={t('请输入额度')}
                         style={{ width: '100%' }}
-                        onChange={(val) => {
-                          const amount = val === '' || val == null ? 0 : val;
-                          formApiRef.current?.setValue('amount', amount);
-                          formApiRef.current?.setValue(
-                            'quota',
-                            displayAmountToQuota(amount),
-                          );
-                        }}
+                        type='number'
+                        rules={[
+                          { required: true, message: t('请输入额度') },
+                          {
+                            validator: (rule, v) => {
+                              const num = parseInt(v, 10);
+                              return num > 0
+                                ? Promise.resolve()
+                                : Promise.reject(t('额度必须大于0'));
+                            },
+                          },
+                        ]}
+                        extraText={renderQuotaWithPrompt(
+                          Number(values.quota) || 0,
+                        )}
+                        data={[
+                          { value: 500000, label: '1$' },
+                          { value: 5000000, label: '10$' },
+                          { value: 25000000, label: '50$' },
+                          { value: 50000000, label: '100$' },
+                          { value: 250000000, label: '500$' },
+                          { value: 500000000, label: '1000$' },
+                        ]}
                         showClear
                       />
-                      <div
-                        className='text-xs cursor-pointer mt-1'
-                        style={{ color: 'var(--semi-color-text-2)' }}
-                        onClick={() => setShowQuotaInput((v) => !v)}
-                      >
-                        {showQuotaInput
-                          ? `▾ ${t('收起原生额度输入')}`
-                          : `▸ ${t('使用原生额度输入')}`}
-                      </div>
-                      <div style={{ display: showQuotaInput ? 'block' : 'none' }} className='mt-2'>
-                        <Form.InputNumber
-                          field='quota'
-                          label={t('额度')}
-                          placeholder={t('输入额度')}
-                          rules={[
-                            { required: true, message: t('请输入额度') },
-                            {
-                              validator: (rule, v) => {
-                                const num = parseInt(v, 10);
-                                return num > 0
-                                  ? Promise.resolve()
-                                  : Promise.reject(t('额度必须大于0'));
-                              },
-                            },
-                          ]}
-                          onChange={(val) => {
-                            const quota = val === '' || val == null ? 0 : val;
-                            formApiRef.current?.setValue('quota', quota);
-                            formApiRef.current?.setValue(
-                              'amount',
-                              Number(quotaToDisplayAmount(quota).toFixed(6)),
-                            );
-                          }}
-                          style={{ width: '100%' }}
-                          showClear
-                        />
-                      </div>
                     </Col>
                     {!isEdit && (
                       <Col span={12}>

@@ -18,97 +18,118 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React from 'react';
-import {
-  Avatar,
-  Card,
-  Tag,
-  Divider,
-  Typography,
-  Badge,
-} from '@douyinfe/semi-ui';
-import {
-  isRoot,
-  isAdmin,
-  renderQuota,
-  stringToColor,
-} from '../../../../helpers';
+import { Avatar, Card, Tag, Divider, Typography, Badge } from '@douyinfe/semi-ui';
+import { isRoot, isAdmin, renderQuota, stringToColor } from '../../../../helpers';
 import { Coins, BarChart2, Users } from 'lucide-react';
 
 const UserInfoHeader = ({ t, userState }) => {
-  const getUsername = () => {
-    if (userState.user) {
-      return userState.user.username;
-    } else {
-      return 'null';
-    }
-  };
-
+  const getUsername = () => userState.user ? userState.user.username : 'null';
   const getAvatarText = () => {
     const username = getUsername();
-    if (username && username.length > 0) {
-      return username.slice(0, 2).toUpperCase();
-    }
-    return 'NA';
+    return username && username.length > 0 ? username.slice(0, 2).toUpperCase() : 'NA';
   };
 
   return (
     <Card
       className='!rounded-2xl overflow-hidden'
+      style={{
+        background: 'var(--hp-card)',
+        border: '1px solid var(--hp-border)',
+        boxShadow: 'var(--hp-shadow)',
+        transition: 'all 0.2s ease',
+      }}
+      bodyStyle={{ padding: '20px 24px' }}
       cover={
         <div
-          className='relative h-32'
+          className='relative h-36'
           style={{
-            '--palette-primary-darkerChannel': '0 75 80',
-            backgroundImage: `linear-gradient(0deg, rgba(var(--palette-primary-darkerChannel) / 80%), rgba(var(--palette-primary-darkerChannel) / 80%)), url('/cover-4.webp')`,
+            backgroundImage: `linear-gradient(160deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.3) 100%), url('/cover-4.webp')`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
-            backgroundRepeat: 'no-repeat',
           }}
         >
-          {/* 用户信息内容 */}
-          <div className='relative z-10 h-full flex flex-col justify-end p-6'>
-            <div className='flex items-center'>
-              <div className='flex items-stretch gap-3 sm:gap-4 flex-1 min-w-0'>
-                <Avatar size='large' color={stringToColor(getUsername())}>
-                  {getAvatarText()}
-                </Avatar>
-                <div className='flex-1 min-w-0 flex flex-col justify-between'>
-                  <div
-                    className='text-3xl font-bold truncate'
-                    style={{ color: 'white' }}
-                  >
-                    {getUsername()}
-                  </div>
-                  <div className='flex flex-wrap items-center gap-2'>
-                    {isRoot() ? (
-                      <Tag
-                        size='large'
-                        shape='circle'
-                        style={{ color: 'white' }}
-                      >
-                        {t('超级管理员')}
-                      </Tag>
-                    ) : isAdmin() ? (
-                      <Tag
-                        size='large'
-                        shape='circle'
-                        style={{ color: 'white' }}
-                      >
-                        {t('管理员')}
-                      </Tag>
-                    ) : (
-                      <Tag
-                        size='large'
-                        shape='circle'
-                        style={{ color: 'white' }}
-                      >
-                        {t('普通用户')}
-                      </Tag>
-                    )}
-                    <Tag size='large' shape='circle' style={{ color: 'white' }}>
-                      ID: {userState?.user?.id}
+          <div className='relative z-10 h-full flex flex-col justify-end px-6 pb-5'>
+            <div className='flex items-center gap-4'>
+              <Avatar
+                size='extra-large'
+                color={stringToColor(getUsername())}
+                style={{
+                  width: 64,
+                  height: 64,
+                  fontSize: 22,
+                  fontWeight: 600,
+                  flexShrink: 0,
+                  boxShadow: '0 2px 16px rgba(0,0,0,0.3)',
+                  border: '2px solid rgba(255,255,255,0.5)',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                {getAvatarText()}
+              </Avatar>
+              <div className='flex flex-col justify-center gap-1.5 min-w-0'>
+                <div
+                  className='text-xl font-semibold truncate'
+                  style={{ color: 'white', letterSpacing: '-0.01em' }}
+                >
+                  {getUsername()}
+                </div>
+                <div className='flex flex-wrap items-center gap-1.5'>
+                  {isRoot() ? (
+                    <Tag
+                      size='small'
+                      shape='circle'
+                      style={{
+                        color: 'white',
+                        background: 'rgba(255,255,255,0.18)',
+                        border: 'none',
+                        backdropFilter: 'blur(4px)',
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
+                      {t('超级管理员')}
                     </Tag>
-                  </div>
+                  ) : isAdmin() ? (
+                    <Tag
+                      size='small'
+                      shape='circle'
+                      style={{
+                        color: 'white',
+                        background: 'rgba(255,255,255,0.18)',
+                        border: 'none',
+                        backdropFilter: 'blur(4px)',
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
+                      {t('管理员')}
+                    </Tag>
+                  ) : (
+                    <Tag
+                      size='small'
+                      shape='circle'
+                      style={{
+                        color: 'white',
+                        background: 'rgba(255,255,255,0.18)',
+                        border: 'none',
+                        backdropFilter: 'blur(4px)',
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
+                      {t('普通用户')}
+                    </Tag>
+                  )}
+                  <Tag
+                    size='small'
+                    shape='circle'
+                    style={{
+                      color: 'white',
+                      background: 'rgba(255,255,255,0.18)',
+                      border: 'none',
+                      backdropFilter: 'blur(4px)',
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    ID: {userState?.user?.id}
+                  </Tag>
                 </div>
               </div>
             </div>
@@ -116,105 +137,114 @@ const UserInfoHeader = ({ t, userState }) => {
         </div>
       }
     >
-      {/* 当前余额和桌面版统计信息 */}
+      {/* 余额 + 统计 */}
       <div className='flex items-start justify-between gap-6'>
-        {/* 当前余额显示 */}
-        <Badge count={t('当前余额')} position='rightTop' type='danger'>
-          <div className='text-2xl sm:text-3xl md:text-4xl font-bold tracking-wide'>
+        <div>
+          <div
+            className='text-xs font-medium mb-1'
+            style={{ color: 'var(--hp-sub)' }}
+          >
+            {t('当前余额')}
+          </div>
+          <div
+            className='text-3xl font-bold tracking-tight'
+            style={{
+              color: 'var(--hp-text, inherit)',
+              letterSpacing: '-0.02em',
+            }}
+          >
             {renderQuota(userState?.user?.quota)}
           </div>
-        </Badge>
+        </div>
 
-        {/* 桌面版统计信息（Semi UI 卡片） */}
+        {/* 桌面端统计 */}
         <div className='hidden lg:block flex-shrink-0'>
-          <Card
-            size='small'
-            className='!rounded-xl'
-            bodyStyle={{ padding: '12px 16px' }}
+          <div
+            className='flex items-center gap-4 px-4 py-3 rounded-2xl'
+            style={{
+              background: 'var(--hp-bg, var(--semi-color-fill-0))',
+              border: '1px solid var(--hp-border)',
+              transition: 'all 0.2s ease',
+            }}
           >
-            <div className='flex items-center gap-4'>
-              <div className='flex items-center gap-2'>
-                <Coins size={16} />
-                <Typography.Text size='small' type='tertiary'>
-                  {t('历史消耗')}
-                </Typography.Text>
-                <Typography.Text size='small' type='tertiary' strong>
-                  {renderQuota(userState?.user?.used_quota)}
-                </Typography.Text>
-              </div>
-              <Divider layout='vertical' />
-              <div className='flex items-center gap-2'>
-                <BarChart2 size={16} />
-                <Typography.Text size='small' type='tertiary'>
-                  {t('请求次数')}
-                </Typography.Text>
-                <Typography.Text size='small' type='tertiary' strong>
-                  {userState.user?.request_count || 0}
-                </Typography.Text>
-              </div>
-              <Divider layout='vertical' />
-              <div className='flex items-center gap-2'>
-                <Users size={16} />
-                <Typography.Text size='small' type='tertiary'>
-                  {t('用户分组')}
-                </Typography.Text>
-                <Typography.Text size='small' type='tertiary' strong>
-                  {userState?.user?.group || t('默认')}
-                </Typography.Text>
-              </div>
-            </div>
-          </Card>
+            <StatItem
+              icon={<Coins size={14} />}
+              label={t('历史消耗')}
+              value={renderQuota(userState?.user?.used_quota)}
+            />
+            <Divider layout='vertical' style={{ height: 28 }} />
+            <StatItem
+              icon={<BarChart2 size={14} />}
+              label={t('请求次数')}
+              value={userState.user?.request_count || 0}
+            />
+            <Divider layout='vertical' style={{ height: 28 }} />
+            <StatItem
+              icon={<Users size={14} />}
+              label={t('用户分组')}
+              value={userState?.user?.group || t('默认')}
+            />
+          </div>
         </div>
       </div>
 
-      {/* 移动端和中等屏幕统计信息卡片 */}
-      <div className='lg:hidden mt-2'>
-        <Card
-          size='small'
-          className='!rounded-xl'
-          bodyStyle={{ padding: '12px 16px' }}
+      {/* 移动端统计 */}
+      <div className='lg:hidden mt-4'>
+        <div
+          className='rounded-2xl overflow-hidden divide-y'
+          style={{
+            border: '1px solid var(--hp-border)',
+            background: 'var(--hp-bg, var(--semi-color-fill-0))',
+          }}
         >
-          <div className='space-y-3'>
-            <div className='flex items-center justify-between'>
-              <div className='flex items-center gap-2'>
-                <Coins size={16} />
-                <Typography.Text size='small' type='tertiary'>
-                  {t('历史消耗')}
-                </Typography.Text>
-              </div>
-              <Typography.Text size='small' type='tertiary' strong>
-                {renderQuota(userState?.user?.used_quota)}
-              </Typography.Text>
-            </div>
-            <Divider margin='8px' />
-            <div className='flex items-center justify-between'>
-              <div className='flex items-center gap-2'>
-                <BarChart2 size={16} />
-                <Typography.Text size='small' type='tertiary'>
-                  {t('请求次数')}
-                </Typography.Text>
-              </div>
-              <Typography.Text size='small' type='tertiary' strong>
-                {userState.user?.request_count || 0}
-              </Typography.Text>
-            </div>
-            <Divider margin='8px' />
-            <div className='flex items-center justify-between'>
-              <div className='flex items-center gap-2'>
-                <Users size={16} />
-                <Typography.Text size='small' type='tertiary'>
-                  {t('用户分组')}
-                </Typography.Text>
-              </div>
-              <Typography.Text size='small' type='tertiary' strong>
-                {userState?.user?.group || t('默认')}
-              </Typography.Text>
-            </div>
-          </div>
-        </Card>
+          <MobileStatRow
+            icon={<Coins size={14} />}
+            label={t('历史消耗')}
+            value={renderQuota(userState?.user?.used_quota)}
+          />
+          <MobileStatRow
+            icon={<BarChart2 size={14} />}
+            label={t('请求次数')}
+            value={userState.user?.request_count || 0}
+          />
+          <MobileStatRow
+            icon={<Users size={14} />}
+            label={t('用户分组')}
+            value={userState?.user?.group || t('默认')}
+          />
+        </div>
       </div>
     </Card>
   );
 };
+
+const StatItem = ({ icon, label, value }) => (
+  <div className='flex items-center gap-2'>
+    <span style={{ color: 'var(--hp-sub)' }}>{icon}</span>
+    <Typography.Text size='small' style={{ color: 'var(--hp-sub)' }}>
+      {label}
+    </Typography.Text>
+    <Typography.Text size='small' strong style={{ color: 'var(--hp-text)' }}>
+      {value}
+    </Typography.Text>
+  </div>
+);
+
+const MobileStatRow = ({ icon, label, value }) => (
+  <div
+    className='flex items-center justify-between px-4 py-3'
+    style={{ transition: 'all 0.2s ease' }}
+  >
+    <div className='flex items-center gap-2' style={{ color: 'var(--hp-sub)' }}>
+      {icon}
+      <Typography.Text size='small' style={{ color: 'var(--hp-sub)' }}>
+        {label}
+      </Typography.Text>
+    </div>
+    <Typography.Text size='small' strong style={{ color: 'var(--hp-text)' }}>
+      {value}
+    </Typography.Text>
+  </div>
+);
 
 export default UserInfoHeader;

@@ -65,17 +65,22 @@ const OtherSetting = () => {
 
   const updateOption = async (key, value) => {
     setLoading(true);
-    const res = await API.put('/api/option/', {
-      key,
-      value,
-    });
-    const { success, message } = res.data;
-    if (success) {
-      setInputs((inputs) => ({ ...inputs, [key]: value }));
-    } else {
-      showError(message);
+    try {
+      const res = await API.put('/api/option/', {
+        key,
+        value,
+      });
+      const { success, message } = res.data;
+      if (success) {
+        setInputs((inputs) => ({ ...inputs, [key]: value }));
+      } else {
+        showError(message);
+      }
+    } catch (err) {
+      console.error('Failed to update option:', err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const [loadingInput, setLoadingInput] = useState({
@@ -88,7 +93,6 @@ const OtherSetting = () => {
     About: false,
     Footer: false,
     CheckUpdate: false,
-    FrontendTheme: false,
   });
   const handleInputChange = async (value, e) => {
     const name = e.target.id;
@@ -285,7 +289,6 @@ const OtherSetting = () => {
       }));
     }
   };
-
   const switchToDefaultFrontend = () => {
     confirmSwitchToDefaultFrontend(t, {
       onLoadingChange: (loading) => {
@@ -298,20 +301,24 @@ const OtherSetting = () => {
   };
 
   const getOptions = async () => {
-    const res = await API.get('/api/option/');
-    const { success, message, data } = res.data;
-    if (success) {
-      let newInputs = {};
-      data.forEach((item) => {
-        if (item.key in inputs) {
-          newInputs[item.key] = item.value;
-        }
-      });
-      setInputs(newInputs);
-      formAPISettingGeneral.current.setValues(newInputs);
-      formAPIPersonalization.current.setValues(newInputs);
-    } else {
-      showError(message);
+    try {
+      const res = await API.get('/api/option/');
+      const { success, message, data } = res.data;
+      if (success) {
+        let newInputs = {};
+        data.forEach((item) => {
+          if (item.key in inputs) {
+            newInputs[item.key] = item.value;
+          }
+        });
+        setInputs(newInputs);
+        formAPISettingGeneral.current.setValues(newInputs);
+        formAPIPersonalization.current.setValues(newInputs);
+      } else {
+        showError(message);
+      }
+    } catch (err) {
+      console.error('Failed to load options:', err);
     }
   };
 
@@ -360,12 +367,6 @@ const OtherSetting = () => {
                       loading={loadingInput['CheckUpdate']}
                     >
                       {t('检查更新')}
-                    </Button>
-                    <Button
-                      onClick={switchToDefaultFrontend}
-                      loading={loadingInput['FrontendTheme']}
-                    >
-                      {t('切换到新版前端')}
                     </Button>
                   </Space>
                 </Col>

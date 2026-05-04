@@ -21,13 +21,14 @@ import React, { useEffect, useState, useMemo, useContext } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Typography } from '@douyinfe/semi-ui';
 import { getFooterHTML, getLogo, getSystemName } from '../../helpers';
-import { StatusContext } from '../../context/Status';
+import { useActualTheme } from '../../context/Theme';
 
 const FooterBar = () => {
   const { t } = useTranslation();
   const [footer, setFooter] = useState(getFooterHTML());
   const systemName = getSystemName();
-  const logo = getLogo();
+  const actualTheme = useActualTheme();
+  const logo = useMemo(() => getLogo(), [actualTheme]);
   const [statusState] = useContext(StatusContext);
   const isDemoSiteMode = statusState?.status?.demo_site_enabled || false;
 
@@ -43,8 +44,8 @@ const FooterBar = () => {
   const customFooter = useMemo(
     () => (
       <footer className='relative h-auto py-16 px-6 md:px-24 w-full flex flex-col items-center justify-between overflow-hidden'>
-        <div className='absolute hidden md:block top-[204px] left-[-100px] w-[151px] h-[151px] rounded-full bg-[#FFD166]'></div>
-        <div className='absolute md:hidden bottom-[20px] left-[-50px] w-[80px] h-[80px] rounded-full bg-[#FFD166] opacity-60'></div>
+        <div className='absolute hidden md:block top-[204px] left-[-100px] w-[151px] h-[151px] rounded-full' style={{ background: 'var(--hp-accent)', opacity: 0.15 }}></div>
+        <div className='absolute md:hidden bottom-[20px] left-[-50px] w-[80px] h-[80px] rounded-full opacity-10' style={{ background: 'var(--hp-accent)' }}></div>
 
         {isDemoSiteMode && (
           <div className='flex flex-col md:flex-row justify-between w-full max-w-[1110px] mb-10 gap-8'>
@@ -52,7 +53,7 @@ const FooterBar = () => {
               <img
                 src={logo}
                 alt={systemName}
-                className='w-16 h-16 rounded-full bg-gray-800 p-1.5 object-contain'
+                className='w-16 h-16 rounded-full p-1.5 object-contain' style={{ background: 'var(--hp-bg-soft)' }}
               />
             </div>
 
@@ -199,14 +200,9 @@ const FooterBar = () => {
             <span className='!text-semi-color-text-1'>
               {t('设计与开发由')}{' '}
             </span>
-            <a
-              href='https://github.com/QuantumNous/new-api'
-              target='_blank'
-              rel='noopener noreferrer'
-              className='!text-semi-color-primary font-medium'
-            >
-              New API
-            </a>
+            <span className='!text-semi-color-primary font-medium'>
+              {systemName}
+            </span>
           </div>
         </div>
       </footer>
@@ -231,14 +227,9 @@ const FooterBar = () => {
               <span className='!text-semi-color-text-1'>
                 {t('设计与开发由')}{' '}
               </span>
-              <a
-                href='https://github.com/QuantumNous/new-api'
-                target='_blank'
-                rel='noopener noreferrer'
-                className='!text-semi-color-primary font-medium'
-              >
-                New API
-              </a>
+              <span className='!text-semi-color-primary font-medium'>
+                {systemName}
+              </span>
             </div>
           </div>
         </footer>

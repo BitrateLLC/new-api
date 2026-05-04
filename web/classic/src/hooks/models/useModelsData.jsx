@@ -293,37 +293,42 @@ export const useModelsData = () => {
   // Manage model (enable/disable/delete)
   const manageModel = async (id, action, record) => {
     let res;
-    switch (action) {
-      case 'delete':
-        res = await API.delete(`/api/models/${id}`);
-        break;
-      case 'enable':
-        res = await API.put('/api/models/?status_only=true', { id, status: 1 });
-        break;
-      case 'disable':
-        res = await API.put('/api/models/?status_only=true', { id, status: 0 });
-        break;
-      default:
-        return;
-    }
-
-    const { success, message } = res.data;
-    if (success) {
-      showSuccess(t('操作成功完成！'));
-      if (action === 'delete') {
-        await refresh();
-      } else {
-        // Update local state for enable/disable
-        setModels((prevModels) =>
-          prevModels.map((model) =>
-            model.id === id
-              ? { ...model, status: action === 'enable' ? 1 : 0 }
-              : model,
-          ),
-        );
+    try {
+      switch (action) {
+        case 'delete':
+          res = await API.delete(`/api/models/${id}`);
+          break;
+        case 'enable':
+          res = await API.put('/api/models/?status_only=true', { id, status: 1 });
+          break;
+        case 'disable':
+          res = await API.put('/api/models/?status_only=true', { id, status: 0 });
+          break;
+        default:
+          return;
       }
-    } else {
-      showError(message);
+
+      const { success, message } = res.data;
+      if (success) {
+        showSuccess(t('操作成功完成！'));
+        if (action === 'delete') {
+          await refresh();
+        } else {
+          // Update local state for enable/disable
+          setModels((prevModels) =>
+            prevModels.map((model) =>
+              model.id === id
+                ? { ...model, status: action === 'enable' ? 1 : 0 }
+                : model,
+            ),
+          );
+        }
+      } else {
+        showError(message);
+      }
+    } catch (error) {
+      console.error('Failed to manage model:', error);
+      showError(error.message || 'Failed to manage model');
     }
   };
 

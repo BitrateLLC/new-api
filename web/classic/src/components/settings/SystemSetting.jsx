@@ -130,6 +130,7 @@ const SystemSetting = () => {
 
   const getOptions = async () => {
     setLoading(true);
+    try {
     const res = await API.get('/api/option/');
     const { success, message, data } = res.data;
     if (success) {
@@ -235,7 +236,11 @@ const SystemSetting = () => {
     } else {
       showError(message);
     }
-    setLoading(false);
+    } catch (err) {
+      console.error('Failed to load options:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {

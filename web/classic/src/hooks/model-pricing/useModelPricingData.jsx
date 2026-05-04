@@ -39,7 +39,7 @@ export const useModelPricingData = () => {
   const [filterEndpointType, setFilterEndpointType] = useState('all'); // 端点类型筛选: 'all' | string
   const [filterVendor, setFilterVendor] = useState('all'); // 供应商筛选: 'all' | 'unknown' | string
   const [filterTag, setFilterTag] = useState('all'); // 模型标签筛选: 'all' | string
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(25);
   const [currentPage, setCurrentPage] = useState(1);
   const [currency, setCurrency] = useState('USD');
   const [showWithRecharge, setShowWithRecharge] = useState(false);
@@ -227,37 +227,41 @@ export const useModelPricingData = () => {
 
   const loadPricing = async () => {
     setLoading(true);
-    let url = '/api/pricing';
-    const res = await API.get(url);
-    const {
-      success,
-      message,
-      data,
-      vendors,
-      group_ratio,
-      usable_group,
-      supported_endpoint,
-      auto_groups,
-    } = res.data;
-    if (success) {
-      setGroupRatio(group_ratio);
-      setUsableGroup(usable_group);
-      setSelectedGroup('all');
-      // 构建供应商 Map 方便查找
-      const vendorMap = {};
-      if (Array.isArray(vendors)) {
-        vendors.forEach((v) => {
-          vendorMap[v.id] = v;
-        });
+    try {
+      let url = '/api/pricing';
+      const res = await API.get(url);
+      const {
+        success,
+        message,
+        data,
+        vendors,
+        group_ratio,
+        usable_group,
+        supported_endpoint,
+        auto_groups,
+      } = res.data;
+      if (success) {
+        setGroupRatio(group_ratio);
+        setUsableGroup(usable_group);
+        setSelectedGroup('all');
+        const vendorMap = {};
+        if (Array.isArray(vendors)) {
+          vendors.forEach((v) => {
+            vendorMap[v.id] = v;
+          });
+        }
+        setVendorsMap(vendorMap);
+        setEndpointMap(supported_endpoint || {});
+        setAutoGroups(auto_groups || []);
+        setModelsFormat(data, group_ratio, vendorMap);
+      } else {
+        showError(message);
       }
-      setVendorsMap(vendorMap);
-      setEndpointMap(supported_endpoint || {});
-      setAutoGroups(auto_groups || []);
-      setModelsFormat(data, group_ratio, vendorMap);
-    } else {
-      showError(message);
+    } catch (error) {
+      console.error('Failed to load pricing:', error);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const refresh = async () => {

@@ -46,14 +46,15 @@ const PricingFilterModal = ({ visible, onClose, sidebarProps, t }) => {
 
   return (
     <Modal
+      className='pricing-filter-modal'
       title={t('筛选')}
       visible={visible}
       onCancel={onClose}
       footer={footer}
-      style={{ width: '100%', height: '100%', margin: 0 }}
+      style={{ width: '100vw', maxWidth: '100vw', height: '100dvh', margin: 0 }}
       bodyStyle={{
         padding: 0,
-        height: 'calc(100vh - 160px)',
+        height: 'calc(100dvh - 160px)',
         overflowY: 'auto',
         scrollbarWidth: 'none',
         msOverflowStyle: 'none',
