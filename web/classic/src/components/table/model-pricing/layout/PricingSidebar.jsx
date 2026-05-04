@@ -1,0 +1,128 @@
+/*
+Copyright (C) 2025 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
+
+import React from 'react';
+import PricingGroups from '../filter/PricingGroups';
+import PricingTags from '../filter/PricingTags';
+import PricingEndpointTypes from '../filter/PricingEndpointTypes';
+import { usePricingFilterCounts } from '../../../../hooks/model-pricing/usePricingFilterCounts';
+
+const PricingSidebar = ({
+  showWithRecharge,
+  setShowWithRecharge,
+  currency,
+  setCurrency,
+  handleChange,
+  setActiveKey,
+  showRatio,
+  setShowRatio,
+  viewMode,
+  setViewMode,
+  filterGroup,
+  setFilterGroup,
+  handleGroupClick,
+  filterQuotaType,
+  setFilterQuotaType,
+  filterEndpointType,
+  setFilterEndpointType,
+  filterVendor,
+  setFilterVendor,
+  filterTag,
+  setFilterTag,
+  currentPage,
+  setCurrentPage,
+  tokenUnit,
+  setTokenUnit,
+  loading,
+  t,
+  ...categoryProps
+}) => {
+  const {
+    vendorModels,
+    tagModels,
+    endpointTypeModels,
+    groupCountModels,
+  } = usePricingFilterCounts({
+    models: categoryProps.models,
+    filterGroup,
+    filterQuotaType,
+    filterEndpointType,
+    filterVendor,
+    filterTag,
+    searchValue: categoryProps.searchValue,
+  });
+
+  const handleResetAll = () => {
+    if (typeof handleGroupClick === 'function') {
+      handleGroupClick('all');
+    } else {
+      setFilterGroup('all');
+    }
+    setFilterEndpointType('all');
+    setFilterTag('all');
+  };
+
+  return (
+    <div className='vendor-sidebar-wrapper'>
+      {/* 筛选标题 + 重置 */}
+      <div className='vendor-sidebar-header'>
+        <span className='vendor-sidebar-header-title'>{t('筛选')}</span>
+        <button
+          className='vendor-sidebar-header-reset'
+          onClick={handleResetAll}
+        >
+          {t('重置')}
+        </button>
+      </div>
+
+      {/* 筛选区 */}
+      <div className='vendor-sidebar-filters' style={{ marginTop: 4 }}>
+        <PricingEndpointTypes
+          filterEndpointType={filterEndpointType}
+          setFilterEndpointType={setFilterEndpointType}
+          models={endpointTypeModels || vendorModels}
+          allModels={categoryProps.models}
+          loading={loading}
+          t={t}
+        />
+
+        <PricingGroups
+          filterGroup={filterGroup}
+          setFilterGroup={handleGroupClick || setFilterGroup}
+          usableGroup={categoryProps.usableGroup}
+          groupRatio={categoryProps.groupRatio}
+          models={groupCountModels}
+          loading={loading}
+          t={t}
+        />
+
+        <PricingTags
+          filterTag={filterTag}
+          setFilterTag={setFilterTag}
+          models={tagModels}
+          allModels={categoryProps.models}
+          loading={loading}
+          t={t}
+        />
+      </div>
+    </div>
+  );
+};
+
+export default PricingSidebar;

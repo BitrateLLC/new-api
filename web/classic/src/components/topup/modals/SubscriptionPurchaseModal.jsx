@@ -1,0 +1,273 @@
+/*
+Copyright (C) 2025 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
+
+import React from 'react';
+import {
+  Banner,
+  Modal,
+  Typography,
+  Card,
+  Button,
+  Select,
+  Divider,
+  Tooltip,
+} from '@douyinfe/semi-ui';
+import { Crown, CalendarClock, Package } from 'lucide-react';
+import { SiStripe } from 'react-icons/si';
+import { IconCreditCard } from '@douyinfe/semi-icons';
+import { renderQuota } from '../../../helpers';
+import { getCurrencyConfig } from '../../../helpers/render';
+import {
+  formatSubscriptionDuration,
+  formatSubscriptionResetPeriod,
+} from '../../../helpers/subscriptionFormat';
+
+const { Text } = Typography;
+
+const SubscriptionPurchaseModal = ({
+  t,
+  visible,
+  onCancel,
+  selectedPlan,
+  paying,
+  selectedEpayMethod,
+  setSelectedEpayMethod,
+  epayMethods = [],
+  enableOnlineTopUp = false,
+  enableStripeTopUp = false,
+  enableCreemTopUp = false,
+  purchaseLimitInfo = null,
+  onPayStripe,
+  onPayCreem,
+  onPayEpay,
+}) => {
+  const plan = selectedPlan?.plan;
+  const totalAmount = Number(plan?.total_amount || 0);
+  const { symbol, rate } = getCurrencyConfig();
+  const price = plan ? Number(plan.price_amount || 0) : 0;
+  const convertedPrice = price * rate;
+  const displayPrice = convertedPrice.toFixed(
+    Number.isInteger(convertedPrice) ? 0 : 2,
+  );
+  // 只有当管理员开启支付网关 AND 套餐配置了对应的支付ID时才显示
+  const hasStripe = enableStripeTopUp && !!plan?.stripe_price_id;
+  const hasCreem = enableCreemTopUp && !!plan?.creem_product_id;
+  const hasEpay = enableOnlineTopUp && epayMethods.length > 0;
+  const hasAnyPayment = hasStripe || hasCreem || hasEpay;
+  const purchaseLimit = Number(purchaseLimitInfo?.limit || 0);
+  const purchaseCount = Number(purchaseLimitInfo?.count || 0);
+  const purchaseLimitReached =
+    purchaseLimit > 0 && purchaseCount >= purchaseLimit;
+
+  const rowStyle = {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '10px 0',
+    borderBottom: '1px solid var(--hp-border)',
+  };
+
+  return (
+    <Modal
+      title={
+        <div className='flex items-center gap-2'>
+          <div
+            style={{
+              width: 28, height: 28, borderRadius: 8,
+              background: 'rgba(var(--hp-accent-rgb), 0.12)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <Crown size={14} style={{ color: 'var(--hp-accent)' }} />
+          </div>
+          <span style={{ color: 'var(--hp-text)', fontWeight: 600 }}>{t('购买订阅套餐')}</span>
+        </div>
+      }
+      visible={visible}
+      onCancel={onCancel}
+      footer={null}
+      size='small'
+      centered
+    >
+      {plan ? (
+        <div style={{ paddingBottom: 16 }}>
+          {/* 套餐信息 */}
+          <div
+            style={{
+              borderRadius: 14,
+              border: '1.5px solid var(--hp-border)',
+              background: 'var(--hp-bg-soft)',
+              padding: '4px 16px',
+              marginBottom: 16,
+            }}
+          >
+            <div style={rowStyle}>
+              <Text style={{ color: 'var(--hp-sub)', fontSize: 13 }}>{t('套餐名称')}</Text>
+              <Typography.Text
+                ellipsis={{ rows: 1, showTooltip: true }}
+                style={{ color: 'var(--hp-text)', fontSize: 13, maxWidth: 180 }}
+              >
+                {plan.title}
+              </Typography.Text>
+            </div>
+
+            <div style={rowStyle}>
+              <Text style={{ color: 'var(--hp-sub)', fontSize: 13 }}>{t('有效期')}</Text>
+              <div className='flex items-center gap-1'>
+                <CalendarClock size={13} style={{ color: 'var(--hp-sub)' }} />
+                <Text style={{ color: 'var(--hp-text)', fontSize: 13 }}>
+                  {formatSubscriptionDuration(plan, t)}
+                </Text>
+              </div>
+            </div>
+
+            {formatSubscriptionResetPeriod(plan, t) !== t('不重置') && (
+              <div style={rowStyle}>
+                <Text style={{ color: 'var(--hp-sub)', fontSize: 13 }}>{t('重置周期')}</Text>
+                <Text style={{ color: 'var(--hp-text)', fontSize: 13 }}>
+                  {formatSubscriptionResetPeriod(plan, t)}
+                </Text>
+              </div>
+            )}
+
+            <div style={rowStyle}>
+              <Text style={{ color: 'var(--hp-sub)', fontSize: 13 }}>{t('总额度')}</Text>
+              <div className='flex items-center gap-1'>
+                <Package size={13} style={{ color: 'var(--hp-sub)' }} />
+                {totalAmount > 0 ? (
+                  <Tooltip content={`${t('原生额度')}：${totalAmount}`}>
+                    <Text style={{ color: 'var(--hp-text)', fontSize: 13 }}>
+                      {renderQuota(totalAmount)}
+                    </Text>
+                  </Tooltip>
+                ) : (
+                  <Text style={{ color: 'var(--hp-text)', fontSize: 13 }}>{t('不限')}</Text>
+                )}
+              </div>
+            </div>
+
+            {plan?.upgrade_group && (
+              <div style={rowStyle}>
+                <Text style={{ color: 'var(--hp-sub)', fontSize: 13 }}>{t('升级分组')}</Text>
+                <Text style={{ color: 'var(--hp-text)', fontSize: 13 }}>{plan.upgrade_group}</Text>
+              </div>
+            )}
+
+            {/* 应付金额 — 最后一行无下边框 */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0' }}>
+              <Text strong style={{ color: 'var(--hp-text)', fontSize: 13 }}>{t('应付金额')}</Text>
+              <Text strong style={{ color: 'var(--hp-accent)', fontSize: 22, lineHeight: 1 }}>
+                {symbol}{displayPrice}
+              </Text>
+            </div>
+          </div>
+
+          {/* 购买上限警告 */}
+          {purchaseLimitReached && (
+            <Banner
+              type='warning'
+              description={`${t('已达到购买上限')} (${purchaseCount}/${purchaseLimit})`}
+              style={{ borderRadius: 12, marginBottom: 12 }}
+              closeIcon={null}
+            />
+          )}
+
+          {/* 支付方式 */}
+          {hasAnyPayment ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <Text style={{ color: 'var(--hp-sub)', fontSize: 12 }}>{t('选择支付方式')}</Text>
+
+              {(hasStripe || hasCreem) && (
+                <div className='flex gap-2'>
+                  {hasStripe && (
+                    <Button
+                      theme='outline'
+                      type='tertiary'
+                      className='flex-1'
+                      style={{ borderRadius: 10 }}
+                      icon={<SiStripe size={14} color='#635BFF' />}
+                      onClick={onPayStripe}
+                      loading={paying}
+                      disabled={purchaseLimitReached}
+                    >
+                      Stripe
+                    </Button>
+                  )}
+                  {hasCreem && (
+                    <Button
+                      theme='outline'
+                      type='tertiary'
+                      className='flex-1'
+                      style={{ borderRadius: 10 }}
+                      icon={<IconCreditCard />}
+                      onClick={onPayCreem}
+                      loading={paying}
+                      disabled={purchaseLimitReached}
+                    >
+                      Creem
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {hasEpay && (
+                <div className='flex gap-2'>
+                  <Select
+                    value={selectedEpayMethod}
+                    onChange={setSelectedEpayMethod}
+                    style={{ flex: 1, borderRadius: 10 }}
+                    size='default'
+                    placeholder={t('选择支付方式')}
+                    optionList={epayMethods.map((m) => ({
+                      value: m.type,
+                      label: m.name || m.type,
+                    }))}
+                    disabled={purchaseLimitReached}
+                  />
+                  <Button
+                    theme='solid'
+                    style={{
+                      background: 'var(--hp-accent)',
+                      borderColor: 'var(--hp-accent)',
+                      borderRadius: 10,
+                    }}
+                    onClick={onPayEpay}
+                    loading={paying}
+                    disabled={!selectedEpayMethod || purchaseLimitReached}
+                  >
+                    {t('支付')}
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <Banner
+              type='info'
+              description={t('管理员未开启在线支付功能，请联系管理员配置。')}
+              style={{ borderRadius: 12 }}
+              closeIcon={null}
+            />
+          )}
+        </div>
+      ) : null}
+    </Modal>
+  );
+};
+
+export default SubscriptionPurchaseModal;
