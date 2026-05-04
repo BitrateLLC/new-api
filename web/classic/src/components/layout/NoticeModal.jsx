@@ -180,7 +180,8 @@ const NoticeModal = ({
                 extra={
                   item.extra ? (
                     <div
-                      className='text-xs text-gray-500'
+                      className='text-xs'
+                      style={{ color: 'var(--hp-sub)' }}
                       dangerouslySetInnerHTML={{ __html: htmlExtra }}
                     />
                   ) : null

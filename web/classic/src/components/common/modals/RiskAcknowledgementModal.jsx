@@ -114,10 +114,13 @@ const RiskAcknowledgementModal = React.memo(function RiskAcknowledgementModal({
       maskClosable={false}
       closeOnEsc={false}
       onCancel={onCancel}
+      style={{
+        borderRadius: '16px',
+      }}
       bodyStyle={{
         maxHeight: isMobile ? '70vh' : '72vh',
         overflowY: 'auto',
-        padding: isMobile ? '12px 16px' : '18px 22px',
+        padding: '24px',
       }}
       footer={
         <Space>

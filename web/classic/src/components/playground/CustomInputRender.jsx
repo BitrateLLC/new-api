@@ -102,12 +102,13 @@ const CustomInputRender = (props) => {
     };
   }, [handlePaste]);
 
-  // 清空按钮
   const styledClearNode = clearContextNode
     ? React.cloneElement(clearContextNode, {
-        className: `!rounded-full !bg-gray-100 hover:!bg-red-500 hover:!text-white flex-shrink-0 transition-all ${clearContextNode.props.className || ''}`,
+        className: `flex-shrink-0 transition-all ${clearContextNode.props.className || ''}`,
         style: {
           ...clearContextNode.props.style,
+          borderRadius: '50%',
+          background: 'var(--hp-bg-soft)',
           width: '32px',
           height: '32px',
           minWidth: '32px',
@@ -115,15 +116,17 @@ const CustomInputRender = (props) => {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
+          transition: 'all 0.2s ease',
         },
       })
     : null;
 
-  // 发送按钮
   const styledSendNode = React.cloneElement(sendNode, {
-    className: `!rounded-full !bg-purple-500 hover:!bg-purple-600 flex-shrink-0 transition-all ${sendNode.props.className || ''}`,
+    className: `flex-shrink-0 transition-all ${sendNode.props.className || ''}`,
     style: {
       ...sendNode.props.style,
+      borderRadius: '50%',
+      background: 'var(--hp-accent)',
       width: '32px',
       height: '32px',
       minWidth: '32px',
@@ -131,21 +134,27 @@ const CustomInputRender = (props) => {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
+      transition: 'all 0.2s ease',
     },
   });
 
   return (
-    <div className='p-2 sm:p-4' ref={containerRef}>
+    <div style={{ padding: '8px 16px', maxWidth: '100%' }} ref={containerRef}>
       <div
-        className='flex items-center gap-2 sm:gap-3 p-2 bg-gray-50 rounded-xl sm:rounded-2xl shadow-sm hover:shadow-md transition-shadow'
-        style={{ border: '1px solid var(--semi-color-border)' }}
+        className='flex items-center gap-2 min-w-0'
+        style={{
+          padding: '8px 12px',
+          background: 'var(--hp-bg-soft)',
+          borderRadius: '16px',
+          border: '1px solid var(--hp-border)',
+          boxShadow: 'var(--hp-shadow)',
+          transition: 'box-shadow 0.2s ease',
+        }}
         onClick={onClick}
         title={t('支持 Ctrl+V 粘贴图片')}
       >
-        {/* 清空对话按钮 - 左边 */}
         {styledClearNode}
-        <div className='flex-1'>{inputNode}</div>
-        {/* 发送按钮 - 右边 */}
+        <div className='flex-1 min-w-0'>{inputNode}</div>
         {styledSendNode}
       </div>
     </div>

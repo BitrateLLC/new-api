@@ -21,9 +21,8 @@ import React, { useRef, useEffect } from 'react';
 import { Typography, TextArea, Button } from '@douyinfe/semi-ui';
 import MarkdownRenderer from '../common/markdown/MarkdownRenderer';
 import ThinkingContent from './ThinkingContent';
-import { Loader2, Check, X, Settings, AlertTriangle } from 'lucide-react';
+import { Loader2, Check, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { isAdmin } from '../../helpers/utils';
 
 const MessageContent = ({
   message,
@@ -63,44 +62,6 @@ const MessageContent = ({
       errorText = message.content;
     } else {
       errorText = t('请求发生错误');
-    }
-
-    if (message.errorCode === 'model_price_error') {
-      return (
-        <div className={`${className}`}>
-          <div
-            className='rounded-lg p-3 space-y-2'
-            style={{
-              background: 'var(--semi-color-bg-0)',
-              border: '1px solid var(--semi-color-border)',
-            }}
-          >
-            <div className='flex items-center gap-2'>
-              <AlertTriangle size={16} className='text-orange-500 shrink-0' />
-              <Typography.Text strong className='!text-[var(--semi-color-text-0)]'>
-                {t('模型价格未配置')}
-              </Typography.Text>
-            </div>
-            <Typography.Paragraph
-              className='!text-[var(--semi-color-text-1)] !text-sm !mb-0'
-              style={{ wordBreak: 'break-word' }}
-            >
-              {errorText}
-            </Typography.Paragraph>
-            {isAdmin() && (
-              <Button
-                size='small'
-                theme='light'
-                type='warning'
-                icon={<Settings size={14} />}
-                onClick={() => window.open('/console/setting?tab=ratio', '_blank')}
-              >
-                {t('前往设置')}
-              </Button>
-            )}
-          </div>
-        </div>
-      );
     }
 
     return (
@@ -213,12 +174,17 @@ const MessageContent = ({
   ) {
     return (
       <div
-        className={`${className} flex items-center gap-2 sm:gap-4 bg-gradient-to-r from-purple-50 to-indigo-50`}
+        className={`${className} flex items-center gap-2 sm:gap-4`}
+        style={{ background: 'var(--hp-bg-soft)', borderRadius: '12px', padding: '8px 12px' }}
       >
-        <div className='w-5 h-5 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-lg'>
+        <div
+          className='w-5 h-5 rounded-full flex items-center justify-center'
+          style={{ background: 'rgba(var(--hp-accent-rgb), 0.15)' }}
+        >
           <Loader2
-            className='animate-spin text-white'
+            className='animate-spin'
             size={styleState.isMobile ? 16 : 20}
+            style={{ color: 'var(--hp-accent)' }}
           />
         </div>
       </div>
@@ -230,15 +196,18 @@ const MessageContent = ({
       {message.role === 'system' && (
         <div className='mb-2 sm:mb-4'>
           <div
-            className='flex items-center gap-2 p-2 sm:p-3 bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg'
-            style={{ border: '1px solid var(--semi-color-border)' }}
+            className='flex items-center gap-2 p-2 sm:p-3 rounded-xl'
+            style={{ background: 'rgba(var(--hp-accent-rgb), 0.08)', border: '1px solid rgba(var(--hp-accent-rgb), 0.2)' }}
           >
-            <div className='w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-sm'>
+            <div
+              className='w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center'
+              style={{ background: 'var(--hp-accent)' }}
+            >
               <Typography.Text className='text-white text-xs font-bold'>
                 S
               </Typography.Text>
             </div>
-            <Typography.Text className='text-amber-700 text-xs sm:text-sm font-medium'>
+            <Typography.Text className='text-xs sm:text-sm font-medium' style={{ color: 'var(--hp-accent)' }}>
               {t('系统消息')}
             </Typography.Text>
           </div>
@@ -266,8 +235,9 @@ const MessageContent = ({
               resize: 'vertical',
               fontSize: styleState.isMobile ? '14px' : '15px',
               lineHeight: '1.6',
+              borderColor: 'var(--hp-border)',
+              background: 'var(--hp-bg-soft)',
             }}
-            className='!border-blue-200 focus:!border-blue-400 !bg-blue-50/50'
           />
           <div className='flex items-center gap-2 w-full'>
             <Button

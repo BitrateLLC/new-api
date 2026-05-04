@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 
 import React, { useState, memo } from 'react';
 import PricingFilterModal from '../../modal/PricingFilterModal';
-import PricingVendorIntroWithSkeleton from './PricingVendorIntroWithSkeleton';
+import PricingVendorIntro from './PricingVendorIntro';
 import SearchActions from './SearchActions';
 
 const PricingTopSection = memo(
@@ -34,6 +34,8 @@ const PricingTopSection = memo(
     filterVendor,
     models,
     filteredModels,
+    currentPage,
+    pageSize,
     loading,
     searchValue,
     showWithRecharge,
@@ -87,9 +89,8 @@ const PricingTopSection = memo(
             />
           </>
         ) : (
-          <PricingVendorIntroWithSkeleton
-            loading={loading}
-            filterVendor={filterVendor}
+          <PricingVendorIntro
+            filterVendor={filterVendor || sidebarProps?.filterVendor}
             models={filteredModels}
             allModels={models}
             t={t}
@@ -105,7 +106,6 @@ const PricingTopSection = memo(
             setShowWithRecharge={setShowWithRecharge}
             currency={currency}
             setCurrency={setCurrency}
-            siteDisplayType={siteDisplayType}
             showRatio={showRatio}
             setShowRatio={setShowRatio}
             viewMode={viewMode}

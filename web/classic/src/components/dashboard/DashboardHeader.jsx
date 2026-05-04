@@ -29,29 +29,45 @@ const DashboardHeader = ({
   loading,
   t,
 }) => {
-  const ICON_BUTTON_CLASS = 'text-white hover:bg-opacity-80 !rounded-full';
-
   return (
-    <div className='flex items-center justify-between mb-4'>
-      <h2
-        className='text-2xl font-semibold text-gray-800 transition-opacity duration-1000 ease-in-out'
-        style={{ opacity: greetingVisible ? 1 : 0 }}
-      >
-        {getGreeting}
-      </h2>
-      <div className='flex gap-3'>
+    <div className='db-header'>
+      <div className='db-header-left'>
+        <h2
+          className='db-header-greeting'
+          style={{ opacity: greetingVisible ? 1 : 0 }}
+        >
+          {getGreeting}
+        </h2>
+      </div>
+      <div className='db-header-actions'>
         <Button
           type='tertiary'
-          icon={<Search size={16} />}
+          icon={<Search size={15} />}
           onClick={showSearchModal}
-          className={`bg-green-500 hover:bg-green-600 ${ICON_BUTTON_CLASS}`}
+          className='db-header-btn'
+          style={{
+            background: 'var(--hp-accent)',
+            color: '#fff',
+            width: 36,
+            height: 36,
+            borderRadius: '50%',
+            boxShadow: '0 2px 10px rgba(var(--hp-accent-rgb), 0.25)',
+          }}
         />
         <Button
           type='tertiary'
-          icon={<RefreshCw size={16} />}
+          icon={<RefreshCw size={15} />}
           onClick={refresh}
           loading={loading}
-          className={`bg-blue-500 hover:bg-blue-600 ${ICON_BUTTON_CLASS}`}
+          className='db-header-btn'
+          style={{
+            background: 'var(--hp-bg-soft)',
+            color: 'var(--hp-sub)',
+            width: 36,
+            height: 36,
+            borderRadius: '50%',
+            border: '1px solid var(--hp-border)',
+          }}
         />
       </div>
     </div>

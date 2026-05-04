@@ -37,27 +37,17 @@ import {
 import { useTranslation } from 'react-i18next';
 import { copy } from '../../helpers';
 
-/**
- * SSEViewer component for displaying Server-Sent Events in an interactive format
- * @param {Object} props - Component props
- * @param {Array} props.sseData - Array of SSE messages to display
- * @returns {JSX.Element} Rendered SSE viewer component
- */
 const SSEViewer = ({ sseData }) => {
   const { t } = useTranslation();
   const [expandedKeys, setExpandedKeys] = useState([]);
   const [copied, setCopied] = useState(false);
 
   const parsedSSEData = useMemo(() => {
-    if (!sseData || !Array.isArray(sseData)) {
-      return [];
-    }
-
+    if (!sseData || !Array.isArray(sseData)) return [];
     return sseData.map((item, index) => {
       let parsed = null;
       let error = null;
       let isDone = false;
-
       if (item === '[DONE]') {
         isDone = true;
       } else {
@@ -67,35 +57,24 @@ const SSEViewer = ({ sseData }) => {
           error = e.message;
         }
       }
-
-      return {
-        index,
-        raw: item,
-        parsed,
-        error,
-        isDone,
-        key: `sse-${index}`,
-      };
+      return { index, raw: item, parsed, error, isDone, key: `sse-${index}` };
     });
   }, [sseData]);
 
   const stats = useMemo(() => {
     const total = parsedSSEData.length;
-    const errors = parsedSSEData.filter((item) => item.error).length;
-    const done = parsedSSEData.filter((item) => item.isDone).length;
+    const errors = parsedSSEData.filter((i) => i.error).length;
+    const done = parsedSSEData.filter((i) => i.isDone).length;
     const valid = total - errors - done;
-
     return { total, errors, done, valid };
   }, [parsedSSEData]);
 
   const handleToggleAll = useCallback(() => {
-    setExpandedKeys((prev) => {
-      if (prev.length === parsedSSEData.length) {
-        return [];
-      } else {
-        return parsedSSEData.map((item) => item.key);
-      }
-    });
+    setExpandedKeys((prev) =>
+      prev.length === parsedSSEData.length
+        ? []
+        : parsedSSEData.map((i) => i.key),
+    );
   }, [parsedSSEData]);
 
   const handleCopyAll = useCallback(async () => {
@@ -105,14 +84,12 @@ const SSEViewer = ({ sseData }) => {
           item.parsed ? JSON.stringify(item.parsed, null, 2) : item.raw,
         )
         .join('\n\n');
-
       await copy(allData);
       setCopied(true);
       Toast.success(t('已复制全部数据'));
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       Toast.error(t('复制失败'));
-      console.error('Copy failed:', err);
     }
   }, [parsedSSEData, t]);
 
@@ -124,7 +101,7 @@ const SSEViewer = ({ sseData }) => {
           : item.raw;
         await copy(textToCopy);
         Toast.success(t('已复制'));
-      } catch (err) {
+      } catch {
         Toast.error(t('复制失败'));
       }
     },
@@ -134,9 +111,20 @@ const SSEViewer = ({ sseData }) => {
   const renderSSEItem = (item) => {
     if (item.isDone) {
       return (
-        <div className='flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg'>
-          <CheckCircle size={16} className='text-green-600' />
-          <Typography.Text className='text-green-600 font-medium'>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '10px 14px',
+            background: 'var(--hp-bg-soft)',
+            borderRadius: '12px',
+            border: '1px solid var(--hp-border)',
+            transition: 'all 0.2s ease',
+          }}
+        >
+          <CheckCircle size={15} style={{ color: 'var(--hp-success, #22c55e)', flexShrink: 0 }} />
+          <Typography.Text style={{ color: 'var(--hp-success, #22c55e)', fontWeight: 500, fontSize: '13px' }}>
             {t('流式响应完成')} [DONE]
           </Typography.Text>
         </div>
@@ -145,25 +133,63 @@ const SSEViewer = ({ sseData }) => {
 
     if (item.error) {
       return (
-        <div className='space-y-2'>
-          <div className='flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg'>
-            <XCircle size={16} className='text-red-600' />
-            <Typography.Text className='text-red-600'>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '10px 14px',
+              background: 'var(--hp-bg-soft)',
+              borderRadius: '12px',
+              border: '1px solid var(--hp-border)',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            <XCircle size={15} style={{ color: 'var(--hp-danger, #ef4444)', flexShrink: 0 }} />
+            <Typography.Text style={{ color: 'var(--hp-danger, #ef4444)', fontSize: '13px' }}>
               {t('解析错误')}: {item.error}
             </Typography.Text>
           </div>
-          <div className='p-3 bg-gray-100 dark:bg-gray-800 rounded-lg font-mono text-xs overflow-auto'>
-            <pre>{item.raw}</pre>
-          </div>
+          <pre
+            style={{
+              padding: '12px 14px',
+              background: 'var(--hp-bg-soft)',
+              borderRadius: '12px',
+              border: '1px solid var(--hp-border)',
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+              fontSize: '12px',
+              color: 'var(--hp-text)',
+              overflowX: 'auto',
+              margin: 0,
+              transition: 'all 0.2s ease',
+            }}
+          >
+            {item.raw}
+          </pre>
         </div>
       );
     }
 
     return (
-      <div className='space-y-2'>
-        {/* JSON 格式化显示 */}
-        <div className='relative'>
-          <pre className='p-4 bg-gray-900 text-gray-100 rounded-lg overflow-auto text-xs font-mono leading-relaxed'>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {/* JSON block */}
+        <div style={{ position: 'relative' }}>
+          <pre
+            style={{
+              padding: '14px 16px',
+              background: 'var(--hp-bg-soft)',
+              borderRadius: '12px',
+              border: '1px solid var(--hp-border)',
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+              fontSize: '12px',
+              color: 'var(--hp-text)',
+              overflowX: 'auto',
+              lineHeight: '1.6',
+              margin: 0,
+              transition: 'all 0.2s ease',
+            }}
+          >
             {JSON.stringify(item.parsed, null, 2)}
           </pre>
           <Button
@@ -171,13 +197,18 @@ const SSEViewer = ({ sseData }) => {
             size='small'
             theme='borderless'
             onClick={() => handleCopySingle(item)}
-            className='absolute top-2 right-2 !bg-gray-800/80 !text-gray-300 hover:!bg-gray-700'
+            style={{
+              position: 'absolute',
+              top: '8px',
+              right: '8px',
+              transition: 'all 0.2s ease',
+            }}
           />
         </div>
 
-        {/* 关键信息摘要 */}
+        {/* Key info badges */}
         {item.parsed?.choices?.[0] && (
-          <div className='flex flex-wrap gap-2 text-xs'>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
             {item.parsed.choices[0].delta?.content && (
               <Badge
                 count={`${t('内容')}: "${String(item.parsed.choices[0].delta.content).substring(0, 20)}..."`}
@@ -207,32 +238,65 @@ const SSEViewer = ({ sseData }) => {
 
   if (!parsedSSEData || parsedSSEData.length === 0) {
     return (
-      <div className='flex items-center justify-center h-full min-h-[200px] text-gray-500'>
-        <span>{t('暂无SSE响应数据')}</span>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: '200px',
+          color: 'var(--hp-sub)',
+          fontSize: '14px',
+        }}
+      >
+        {t('暂无SSE响应数据')}
       </div>
     );
   }
 
   return (
-    <div className='h-full flex flex-col bg-gray-50 dark:bg-gray-900/50 rounded-lg'>
-      {/* 头部工具栏 */}
-      <div className='flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0'>
-        <div className='flex items-center gap-3'>
-          <Zap size={16} className='text-blue-500' />
-          <Typography.Text strong>{t('SSE数据流')}</Typography.Text>
+    <div
+      style={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        background: 'var(--hp-bg-soft)',
+        borderRadius: '12px',
+        border: '1px solid var(--hp-border)',
+        overflow: 'hidden',
+        transition: 'all 0.2s ease',
+      }}
+    >
+      {/* Toolbar */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '12px 16px',
+          borderBottom: '1px solid var(--hp-border)',
+          flexShrink: 0,
+          transition: 'all 0.2s ease',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <Zap size={15} style={{ color: 'var(--hp-sub)' }} />
+          <Typography.Text strong style={{ fontSize: '13px', color: 'var(--hp-text)' }}>
+            {t('SSE数据流')}
+          </Typography.Text>
           <Badge count={stats.total} type='primary' />
           {stats.errors > 0 && (
             <Badge count={`${stats.errors} ${t('错误')}`} type='danger' />
           )}
         </div>
 
-        <div className='flex items-center gap-2'>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <Tooltip content={t('复制全部')}>
             <Button
-              icon={<Copy size={14} />}
+              icon={<Copy size={13} />}
               size='small'
               onClick={handleCopyAll}
               theme='borderless'
+              style={{ transition: 'all 0.2s ease' }}
             >
               {copied ? t('已复制') : t('复制全部')}
             </Button>
@@ -247,14 +311,15 @@ const SSEViewer = ({ sseData }) => {
             <Button
               icon={
                 expandedKeys.length === parsedSSEData.length ? (
-                  <ChevronUp size={14} />
+                  <ChevronUp size={13} />
                 ) : (
-                  <ChevronDown size={14} />
+                  <ChevronDown size={13} />
                 )
               }
               size='small'
               onClick={handleToggleAll}
               theme='borderless'
+              style={{ transition: 'all 0.2s ease' }}
             >
               {expandedKeys.length === parsedSSEData.length
                 ? t('收起')
@@ -264,33 +329,49 @@ const SSEViewer = ({ sseData }) => {
         </div>
       </div>
 
-      {/* SSE 数据列表 */}
-      <div className='flex-1 overflow-auto p-4'>
+      {/* SSE list */}
+      <div
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: '12px 16px',
+          scrollbarWidth: 'thin',
+          scrollbarColor: 'var(--hp-border) transparent',
+        }}
+      >
         <Collapse
           activeKey={expandedKeys}
           onChange={setExpandedKeys}
           accordion={false}
-          className='bg-white dark:bg-gray-800 rounded-lg'
+          style={{
+            background: 'transparent',
+            borderRadius: '12px',
+            border: '1px solid var(--hp-border)',
+            overflow: 'hidden',
+          }}
         >
           {parsedSSEData.map((item) => (
             <Collapse.Panel
               key={item.key}
+              style={{ transition: 'all 0.2s ease' }}
               header={
-                <div className='flex items-center gap-2'>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Badge count={`#${item.index + 1}`} type='tertiary' />
                   {item.isDone ? (
-                    <span className='text-green-600 font-medium'>[DONE]</span>
+                    <span style={{ color: 'var(--hp-success, #22c55e)', fontWeight: 500, fontSize: '13px' }}>
+                      [DONE]
+                    </span>
                   ) : item.error ? (
-                    <span className='text-red-600'>{t('解析错误')}</span>
+                    <span style={{ color: 'var(--hp-danger, #ef4444)', fontSize: '13px' }}>
+                      {t('解析错误')}
+                    </span>
                   ) : (
                     <>
-                      <span className='text-gray-600'>
-                        {item.parsed?.id ||
-                          item.parsed?.object ||
-                          t('SSE 事件')}
+                      <span style={{ color: 'var(--hp-text)', fontSize: '13px' }}>
+                        {item.parsed?.id || item.parsed?.object || t('SSE 事件')}
                       </span>
                       {item.parsed?.choices?.[0]?.delta && (
-                        <span className='text-xs text-gray-400'>
+                        <span style={{ fontSize: '11px', color: 'var(--hp-sub)' }}>
                           •{' '}
                           {Object.keys(item.parsed.choices[0].delta)
                             .filter((k) => item.parsed.choices[0].delta[k])

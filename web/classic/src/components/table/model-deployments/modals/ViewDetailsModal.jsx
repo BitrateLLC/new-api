@@ -142,7 +142,7 @@ const ViewDetailsModal = ({ visible, onCancel, deployment, t }) => {
     <Modal
       title={
         <div className='flex items-center gap-2'>
-          <FaInfoCircle className='text-blue-500' />
+          <FaInfoCircle className='text-orange-500' />
           <span>{t('容器详情')}</span>
         </div>
       }
@@ -174,7 +174,7 @@ const ViewDetailsModal = ({ visible, onCancel, deployment, t }) => {
           <Card
             title={
               <div className='flex items-center gap-2'>
-                <FaServer className='text-blue-500' />
+                <FaServer className='text-orange-500' />
                 <span>{t('基本信息')}</span>
               </div>
             }
@@ -312,7 +312,7 @@ const ViewDetailsModal = ({ visible, onCancel, deployment, t }) => {
             <Card
               title={
                 <div className='flex items-center gap-2'>
-                  <FaDocker className='text-blue-600' />
+                  <FaDocker className='text-orange-600' />
                   <span>{t('容器配置')}</span>
                 </div>
               }
@@ -362,7 +362,7 @@ const ViewDetailsModal = ({ visible, onCancel, deployment, t }) => {
                             key={key}
                             className='flex gap-2 text-sm font-mono mb-1'
                           >
-                            <span className='text-blue-600 font-medium'>
+                            <span className='text-orange-600 font-medium'>
                               {key}=
                             </span>
                             <span className='text-gray-700 break-all'>

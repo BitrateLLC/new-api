@@ -27,7 +27,7 @@ import StatsCards from './StatsCards';
 import ChartsPanel from './ChartsPanel';
 import ApiInfoPanel from './ApiInfoPanel';
 import AnnouncementsPanel from './AnnouncementsPanel';
-import FaqPanel from './FaqPanel';
+// FaqPanel removed from layout per requirement
 import UptimePanel from './UptimePanel';
 import SearchModal from './modals/SearchModal';
 
@@ -86,22 +86,12 @@ const Dashboard = () => {
   );
 
   // ========== 数据处理 ==========
-  const loadUserData = async () => {
-    if (dashboardData.isAdminUser) {
-      const userData = await dashboardData.loadUserQuotaData();
-      if (userData && userData.length > 0) {
-        dashboardCharts.updateUserChartData(userData);
-      }
-    }
-  };
-
   const initChart = async () => {
     await dashboardData.loadQuotaData().then((data) => {
       if (data && data.length > 0) {
         dashboardCharts.updateChartData(data);
       }
     });
-    await loadUserData();
     await dashboardData.loadUptimeData();
   };
 
@@ -110,12 +100,10 @@ const Dashboard = () => {
     if (data && data.length > 0) {
       dashboardCharts.updateChartData(data);
     }
-    await loadUserData();
   };
 
   const handleSearchConfirm = async () => {
     await dashboardData.handleSearchConfirm(dashboardCharts.updateChartData);
-    await loadUserData();
   };
 
   // ========== 数据准备 ==========
@@ -135,7 +123,7 @@ const Dashboard = () => {
       };
     },
   );
-  const faqData = statusState?.status?.faq || [];
+  const faqData = statusState?.status?.faq || []; // kept for potential future use
 
   const uptimeLegendData = Object.entries(UPTIME_STATUS_MAP).map(
     ([status, info]) => ({
@@ -151,7 +139,7 @@ const Dashboard = () => {
   }, []);
 
   return (
-    <div className='h-full'>
+    <div className='db-container'>
       <DashboardHeader
         getGreeting={dashboardData.getGreeting}
         greetingVisible={dashboardData.greetingVisible}
@@ -183,9 +171,9 @@ const Dashboard = () => {
       />
 
       {/* API信息和图表面板 */}
-      <div className='mb-4'>
+      <div className='db-section'>
         <div
-          className={`grid grid-cols-1 gap-4 ${dashboardData.hasApiInfoPanel ? 'lg:grid-cols-4' : ''}`}
+          className={`grid grid-cols-1 gap-5 ${dashboardData.hasApiInfoPanel ? 'lg:grid-cols-4' : ''}`}
         >
           <ChartsPanel
             activeChartTab={dashboardData.activeChartTab}
@@ -194,9 +182,6 @@ const Dashboard = () => {
             spec_model_line={dashboardCharts.spec_model_line}
             spec_pie={dashboardCharts.spec_pie}
             spec_rank_bar={dashboardCharts.spec_rank_bar}
-            spec_user_rank={dashboardCharts.spec_user_rank}
-            spec_user_trend={dashboardCharts.spec_user_trend}
-            isAdminUser={dashboardData.isAdminUser}
             CARD_PROPS={CARD_PROPS}
             CHART_CONFIG={CHART_CONFIG}
             FLEX_CENTER_GAP2={FLEX_CENTER_GAP2}
@@ -220,30 +205,17 @@ const Dashboard = () => {
 
       {/* 系统公告和常见问答卡片 */}
       {dashboardData.hasInfoPanels && (
-        <div className='mb-4'>
-          <div className='grid grid-cols-1 lg:grid-cols-4 gap-4'>
+        <div className='db-section'>
+          <div className='grid grid-cols-1 lg:grid-cols-4 gap-5'>
             {/* 公告卡片 */}
             {dashboardData.announcementsEnabled && (
               <AnnouncementsPanel
                 announcementData={announcementData}
-                announcementLegendData={ANNOUNCEMENT_LEGEND_DATA.map(
-                  (item) => ({
-                    ...item,
-                    label: dashboardData.t(item.label),
-                  }),
-                )}
+                announcementLegendData={ANNOUNCEMENT_LEGEND_DATA.map(item => ({
+                  ...item,
+                  label: dashboardData.t(item.label),
+                }))}
                 CARD_PROPS={CARD_PROPS}
-                ILLUSTRATION_SIZE={ILLUSTRATION_SIZE}
-                t={dashboardData.t}
-              />
-            )}
-
-            {/* 常见问答卡片 */}
-            {dashboardData.faqEnabled && (
-              <FaqPanel
-                faqData={faqData}
-                CARD_PROPS={CARD_PROPS}
-                FLEX_CENTER_GAP2={FLEX_CENTER_GAP2}
                 ILLUSTRATION_SIZE={ILLUSTRATION_SIZE}
                 t={dashboardData.t}
               />
@@ -258,6 +230,12 @@ const Dashboard = () => {
                 setActiveUptimeTab={dashboardData.setActiveUptimeTab}
                 loadUptimeData={dashboardData.loadUptimeData}
                 uptimeLegendData={uptimeLegendData}
+                announcementLegendData={ANNOUNCEMENT_LEGEND_DATA.map(
+                  (item) => ({
+                    ...item,
+                    label: dashboardData.t(item.label),
+                  }),
+                )}
                 renderMonitorList={(monitors) =>
                   renderMonitorList(
                     monitors,

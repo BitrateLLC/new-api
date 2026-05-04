@@ -32,7 +32,6 @@ const FloatingButtons = ({
 
   return (
     <>
-      {/* 设置按钮 */}
       {!showSettings && (
         <Button
           icon={<Settings size={18} />}
@@ -41,12 +40,14 @@ const FloatingButtons = ({
             right: 16,
             bottom: 90,
             zIndex: 1000,
-            width: 36,
-            height: 36,
+            width: 44,
+            height: 44,
             borderRadius: '50%',
             padding: 0,
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
-            background: 'linear-gradient(to right, #8b5cf6, #6366f1)',
+            boxShadow: 'var(--hp-shadow-md)',
+            background: 'var(--hp-accent)',
+            border: 'none',
+            transition: 'all 0.2s ease',
           }}
           onClick={onToggleSettings}
           theme='solid'
@@ -55,26 +56,26 @@ const FloatingButtons = ({
         />
       )}
 
-      {/* 调试按钮 */}
       {!showSettings && (
         <Button
           icon={showDebugPanel ? <EyeOff size={18} /> : <Eye size={18} />}
           onClick={onToggleDebugPanel}
           theme='solid'
-          type={showDebugPanel ? 'danger' : 'primary'}
           style={{
             position: 'fixed',
             right: 16,
-            bottom: 140,
+            bottom: 148,
             zIndex: 1000,
-            width: 36,
-            height: 36,
+            width: 44,
+            height: 44,
             borderRadius: '50%',
             padding: 0,
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
+            boxShadow: 'var(--hp-shadow-md)',
             background: showDebugPanel
-              ? 'linear-gradient(to right, #e11d48, #be123c)'
-              : 'linear-gradient(to right, #4f46e5, #6366f1)',
+              ? '#dc2626'
+              : 'var(--hp-accent)',
+            border: 'none',
+            transition: 'all 0.2s ease',
           }}
           className='lg:hidden'
         />

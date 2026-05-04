@@ -57,12 +57,9 @@ const CheckinCalendar = ({ t, status, turnstileEnabled, turnstileSiteKey }) => {
   const [currentMonth, setCurrentMonth] = useState(
     new Date().toISOString().slice(0, 7),
   );
-  // 初始加载状态，用于避免折叠状态闪烁
   const [initialLoaded, setInitialLoaded] = useState(false);
-  // 折叠状态：null 表示未确定（等待首次加载）
   const [isCollapsed, setIsCollapsed] = useState(null);
 
-  // 创建日期到额度的映射，方便快速查找
   const checkinRecordsMap = useMemo(() => {
     const map = {};
     const records = checkinData.stats?.records || [];
@@ -72,7 +69,6 @@ const CheckinCalendar = ({ t, status, turnstileEnabled, turnstileSiteKey }) => {
     return map;
   }, [checkinData.stats?.records]);
 
-  // 计算本月获得的额度
   const monthlyQuota = useMemo(() => {
     const records = checkinData.stats?.records || [];
     return records.reduce(
@@ -81,7 +77,6 @@ const CheckinCalendar = ({ t, status, turnstileEnabled, turnstileSiteKey }) => {
     );
   }, [checkinData.stats?.records]);
 
-  // 获取签到状态
   const fetchCheckinStatus = async (month) => {
     const isFirstLoad = !initialLoaded;
     setLoading(true);
@@ -90,7 +85,6 @@ const CheckinCalendar = ({ t, status, turnstileEnabled, turnstileSiteKey }) => {
       const { success, data, message } = res.data;
       if (success) {
         setCheckinData(data);
-        // 首次加载时，根据签到状态设置折叠状态
         if (isFirstLoad) {
           setIsCollapsed(data.stats?.checked_in_today ?? false);
           setInitialLoaded(true);
@@ -135,7 +129,6 @@ const CheckinCalendar = ({ t, status, turnstileEnabled, turnstileSiteKey }) => {
         showSuccess(
           t('签到成功！获得') + ' ' + renderQuota(data.quota_awarded),
         );
-        // 刷新签到状态
         fetchCheckinStatus(currentMonth);
         setTurnstileModalVisible(false);
       } else {
@@ -165,24 +158,17 @@ const CheckinCalendar = ({ t, status, turnstileEnabled, turnstileSiteKey }) => {
     }
   }, [status?.checkin_enabled, currentMonth]);
 
-  // 如果签到功能未启用，不显示组件
   if (!status?.checkin_enabled) {
     return null;
   }
 
-  // 日期渲染函数 - 显示签到状态和获得的额度
   const dateRender = (dateString) => {
-    // Semi Calendar 传入的 dateString 是 Date.toString() 格式
-    // 需要转换为 YYYY-MM-DD 格式来匹配后端数据
     const date = new Date(dateString);
-    if (isNaN(date.getTime())) {
-      return null;
-    }
-    // 使用本地时间格式化，避免时区问题
+    if (isNaN(date.getTime())) return null;
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
-    const formattedDate = `${year}-${month}-${day}`; // YYYY-MM-DD
+    const formattedDate = `${year}-${month}-${day}`;
     const quotaAwarded = checkinRecordsMap[formattedDate];
     const isCheckedIn = quotaAwarded !== undefined;
 
@@ -193,10 +179,24 @@ const CheckinCalendar = ({ t, status, turnstileEnabled, turnstileSiteKey }) => {
           position='top'
         >
           <div className='absolute inset-0 flex flex-col items-center justify-center cursor-pointer'>
-            <div className='w-6 h-6 rounded-full bg-green-500 flex items-center justify-center mb-0.5 shadow-sm'>
-              <Check size={14} className='text-white' strokeWidth={3} />
+            <div
+              className='w-6 h-6 rounded-full flex items-center justify-center mb-0.5 shadow-sm'
+              style={{
+                background: 'rgba(var(--hp-accent-rgb), 0.15)',
+                border: '1.5px solid var(--hp-accent)',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              <Check
+                size={13}
+                style={{ color: 'var(--hp-accent)' }}
+                strokeWidth={3}
+              />
             </div>
-            <div className='text-[10px] font-medium text-green-600 dark:text-green-400 leading-none'>
+            <div
+              className='text-[10px] font-medium leading-none'
+              style={{ color: 'var(--hp-accent)' }}
+            >
               {renderQuota(quotaAwarded)}
             </div>
           </div>
@@ -206,14 +206,23 @@ const CheckinCalendar = ({ t, status, turnstileEnabled, turnstileSiteKey }) => {
     return null;
   };
 
-  // 处理月份变化
   const handleMonthChange = (date) => {
     const month = date.toISOString().slice(0, 7);
     setCurrentMonth(month);
   };
 
+  const checkedInToday = checkinData.stats?.checked_in_today;
+
   return (
-    <Card className='!rounded-2xl'>
+    <Card
+      className='!rounded-2xl'
+      style={{
+        background: 'var(--hp-card)',
+        border: '1px solid var(--hp-border)',
+        boxShadow: 'var(--hp-shadow)',
+        transition: 'all 0.2s ease',
+      }}
+    >
       <Modal
         title='Security Check'
         visible={turnstileModalVisible}
@@ -228,12 +237,8 @@ const CheckinCalendar = ({ t, status, turnstileEnabled, turnstileSiteKey }) => {
           <Turnstile
             key={turnstileWidgetKey}
             sitekey={turnstileSiteKey}
-            onVerify={(token) => {
-              doCheckin(token);
-            }}
-            onExpire={() => {
-              setTurnstileWidgetKey((v) => v + 1);
-            }}
+            onVerify={(token) => doCheckin(token)}
+            onExpire={() => setTurnstileWidgetKey((v) => v + 1)}
           />
         </div>
       </Modal>
@@ -241,27 +246,40 @@ const CheckinCalendar = ({ t, status, turnstileEnabled, turnstileSiteKey }) => {
       {/* 卡片头部 */}
       <div className='flex items-center justify-between'>
         <div
-          className='flex items-center flex-1 cursor-pointer'
+          className='flex items-center flex-1 cursor-pointer select-none'
           onClick={() => setIsCollapsed(!isCollapsed)}
+          style={{ transition: 'all 0.2s ease' }}
         >
-          <Avatar size='small' color='green' className='mr-3 shadow-md'>
+          <Avatar
+            size='small'
+            className='mr-3'
+            style={{
+              background: 'rgba(var(--hp-accent-rgb), 0.12)',
+              color: 'var(--hp-accent)',
+              boxShadow: 'none',
+              flexShrink: 0,
+            }}
+          >
             <CalendarCheck size={16} />
           </Avatar>
           <div className='flex-1'>
             <div className='flex items-center gap-2'>
-              <Typography.Text className='text-lg font-medium'>
+              <Typography.Text
+                className='text-lg font-medium'
+                style={{ color: 'var(--hp-text)' }}
+              >
                 {t('每日签到')}
               </Typography.Text>
               {isCollapsed ? (
-                <ChevronDown size={16} className='text-gray-400' />
+                <ChevronDown size={15} style={{ color: 'var(--hp-sub)' }} />
               ) : (
-                <ChevronUp size={16} className='text-gray-400' />
+                <ChevronUp size={15} style={{ color: 'var(--hp-sub)' }} />
               )}
             </div>
-            <div className='text-xs text-gray-500 dark:text-gray-400'>
+            <div className='text-xs' style={{ color: 'var(--hp-sub)' }}>
               {!initialLoaded
                 ? t('正在加载签到状态...')
-                : checkinData.stats?.checked_in_today
+                : checkedInToday
                   ? t('今日已签到，累计签到') +
                     ` ${checkinData.stats?.total_checkins || 0} ` +
                     t('天')
@@ -269,18 +287,27 @@ const CheckinCalendar = ({ t, status, turnstileEnabled, turnstileSiteKey }) => {
             </div>
           </div>
         </div>
+
         <Button
           type='primary'
           theme='solid'
-          icon={<Gift size={16} />}
+          icon={<Gift size={15} />}
           onClick={() => doCheckin()}
           loading={checkinLoading || !initialLoaded}
-          disabled={!initialLoaded || checkinData.stats?.checked_in_today}
-          className='!bg-green-600 hover:!bg-green-700'
+          disabled={!initialLoaded || checkedInToday}
+          style={{
+            borderRadius: '10px',
+            background: checkedInToday
+              ? undefined
+              : 'var(--hp-accent)',
+            border: 'none',
+            transition: 'all 0.2s ease',
+            flexShrink: 0,
+          }}
         >
           {!initialLoaded
             ? t('加载中...')
-            : checkinData.stats?.checked_in_today
+            : checkedInToday
               ? t('今日已签到')
               : t('立即签到')}
         </Button>
@@ -290,74 +317,101 @@ const CheckinCalendar = ({ t, status, turnstileEnabled, turnstileSiteKey }) => {
       <Collapsible isOpen={isCollapsed === false} keepDOM>
         {/* 签到统计 */}
         <div className='grid grid-cols-3 gap-3 mb-4 mt-4'>
-          <div className='text-center p-2.5 bg-slate-50 dark:bg-slate-800 rounded-lg'>
-            <div className='text-xl font-bold text-green-600'>
-              {checkinData.stats?.total_checkins || 0}
+          {[
+            {
+              value: checkinData.stats?.total_checkins || 0,
+              label: t('累计签到'),
+            },
+            {
+              value: renderQuota(monthlyQuota, 6),
+              label: t('本月获得'),
+            },
+            {
+              value: renderQuota(checkinData.stats?.total_quota || 0, 6),
+              label: t('累计获得'),
+            },
+          ].map((item, i) => (
+            <div
+              key={i}
+              className='text-center py-3 px-2 rounded-xl'
+              style={{
+                background: 'rgba(var(--hp-accent-rgb), 0.06)',
+                border: '1px solid rgba(var(--hp-accent-rgb), 0.12)',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              <div
+                className='text-xl font-bold'
+                style={{ color: 'var(--hp-accent)' }}
+              >
+                {item.value}
+              </div>
+              <div className='text-xs mt-0.5' style={{ color: 'var(--hp-sub)' }}>
+                {item.label}
+              </div>
             </div>
-            <div className='text-xs text-gray-500'>{t('累计签到')}</div>
-          </div>
-          <div className='text-center p-2.5 bg-slate-50 dark:bg-slate-800 rounded-lg'>
-            <div className='text-xl font-bold text-orange-600'>
-              {renderQuota(monthlyQuota, 6)}
-            </div>
-            <div className='text-xs text-gray-500'>{t('本月获得')}</div>
-          </div>
-          <div className='text-center p-2.5 bg-slate-50 dark:bg-slate-800 rounded-lg'>
-            <div className='text-xl font-bold text-blue-600'>
-              {renderQuota(checkinData.stats?.total_quota || 0, 6)}
-            </div>
-            <div className='text-xs text-gray-500'>{t('累计获得')}</div>
-          </div>
+          ))}
         </div>
 
-        {/* 签到日历 - 使用更紧凑的样式 */}
+        {/* 签到日历 */}
         <Spin spinning={loading}>
-          <div className='border rounded-lg overflow-hidden checkin-calendar'>
+          <div
+            className='rounded-xl overflow-hidden checkin-calendar'
+            style={{
+              border: '1px solid var(--hp-border)',
+              transition: 'all 0.2s ease',
+            }}
+          >
             <style>{`
-            .checkin-calendar .semi-calendar {
-              font-size: 13px;
-            }
-            .checkin-calendar .semi-calendar-month-header {
-              padding: 8px 12px;
-            }
-            .checkin-calendar .semi-calendar-month-week-row {
-              height: 28px;
-            }
-            .checkin-calendar .semi-calendar-month-week-row th {
-              font-size: 12px;
-              padding: 4px 0;
-            }
-            .checkin-calendar .semi-calendar-month-grid-row {
-              height: auto;
-            }
-            .checkin-calendar .semi-calendar-month-grid-row td {
-              height: 56px;
-              padding: 2px;
-            }
-            .checkin-calendar .semi-calendar-month-grid-row-cell {
-              position: relative;
-              height: 100%;
-            }
-            .checkin-calendar .semi-calendar-month-grid-row-cell-day {
-              position: absolute;
-              top: 4px;
-              left: 50%;
-              transform: translateX(-50%);
-              font-size: 12px;
-              z-index: 1;
-            }
-            .checkin-calendar .semi-calendar-month-same {
-              background: transparent;
-            }
-            .checkin-calendar .semi-calendar-month-today .semi-calendar-month-grid-row-cell-day {
-              background: var(--semi-color-primary);
-              color: white;border-radius: 50%;
-              width: 20px;
-              height: 20px;
-              display: flex;
-              align-items: center;
-              justify-content: center;}
-          `}</style>
+              .checkin-calendar .semi-calendar {
+                font-size: 13px;
+                background: transparent;
+              }
+              .checkin-calendar .semi-calendar-month-header {
+                padding: 8px 12px;
+              }
+              .checkin-calendar .semi-calendar-month-week-row {
+                height: 28px;
+              }
+              .checkin-calendar .semi-calendar-month-week-row th {
+                font-size: 12px;
+                padding: 4px 0;
+                color: var(--hp-sub);
+              }
+              .checkin-calendar .semi-calendar-month-grid-row {
+                height: auto;
+              }
+              .checkin-calendar .semi-calendar-month-grid-row td {
+                height: 56px;
+                padding: 2px;
+              }
+              .checkin-calendar .semi-calendar-month-grid-row-cell {
+                position: relative;
+                height: 100%;
+              }
+              .checkin-calendar .semi-calendar-month-grid-row-cell-day {
+                position: absolute;
+                top: 4px;
+                left: 50%;
+                transform: translateX(-50%);
+                font-size: 12px;
+                z-index: 1;
+                color: var(--hp-text);
+              }
+              .checkin-calendar .semi-calendar-month-same {
+                background: transparent;
+              }
+              .checkin-calendar .semi-calendar-month-today .semi-calendar-month-grid-row-cell-day {
+                background: var(--hp-accent);
+                color: white;
+                border-radius: 50%;
+                width: 20px;
+                height: 20px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+              }
+            `}</style>
             <Calendar
               mode='month'
               onChange={handleMonthChange}
@@ -367,9 +421,15 @@ const CheckinCalendar = ({ t, status, turnstileEnabled, turnstileSiteKey }) => {
         </Spin>
 
         {/* 签到说明 */}
-        <div className='mt-3 p-2.5 bg-slate-50 dark:bg-slate-800 rounded-lg'>
+        <div
+          className='mt-3 p-3 rounded-xl'
+          style={{
+            background: 'rgba(var(--hp-accent-rgb), 0.04)',
+            border: '1px solid rgba(var(--hp-accent-rgb), 0.1)',
+          }}
+        >
           <Typography.Text type='tertiary' className='text-xs'>
-            <ul className='list-disc list-inside space-y-0.5'>
+            <ul className='list-disc list-inside space-y-0.5' style={{ color: 'var(--hp-sub)' }}>
               <li>{t('每日签到可获得随机额度奖励')}</li>
               <li>{t('签到奖励将直接添加到您的账户余额')}</li>
               <li>{t('每日仅可签到一次，请勿重复签到')}</li>

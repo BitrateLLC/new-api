@@ -18,14 +18,9 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React from 'react';
-import { Button } from '@douyinfe/semi-ui';
-import PricingGroups from '../filter/PricingGroups';
-import PricingQuotaTypes from '../filter/PricingQuotaTypes';
-import PricingEndpointTypes from '../filter/PricingEndpointTypes';
-import PricingVendors from '../filter/PricingVendors';
+import { Divider } from '@douyinfe/semi-ui';
 import PricingTags from '../filter/PricingTags';
-
-import { resetPricingFilters } from '../../../../helpers/utils';
+import PricingEndpointTypes from '../filter/PricingEndpointTypes';
 import { usePricingFilterCounts } from '../../../../hooks/model-pricing/usePricingFilterCounts';
 
 const PricingSidebar = ({
@@ -59,11 +54,9 @@ const PricingSidebar = ({
   ...categoryProps
 }) => {
   const {
-    quotaTypeModels,
-    endpointTypeModels,
     vendorModels,
     tagModels,
-    groupCountModels,
+    endpointTypeModels,
   } = usePricingFilterCounts({
     models: categoryProps.models,
     filterGroup,
@@ -74,80 +67,44 @@ const PricingSidebar = ({
     searchValue: categoryProps.searchValue,
   });
 
-  const handleResetFilters = () =>
-    resetPricingFilters({
-      handleChange,
-      setShowWithRecharge,
-      setCurrency,
-      setShowRatio,
-      setViewMode,
-      setFilterGroup,
-      setFilterQuotaType,
-      setFilterEndpointType,
-      setFilterVendor,
-      setFilterTag,
-      setCurrentPage,
-      setTokenUnit,
-    });
+  const handleResetAll = () => {
+    setFilterEndpointType('all');
+    setFilterTag('all');
+  };
 
   return (
-    <div className='p-2'>
-      <div className='flex items-center justify-between mb-6'>
-        <div className='text-lg font-semibold text-gray-800'>{t('筛选')}</div>
-        <Button
-          theme='outline'
-          type='tertiary'
-          onClick={handleResetFilters}
-          className='text-gray-500 hover:text-gray-700'
+    <div className='vendor-sidebar-wrapper'>
+      {/* 筛选标题 + 重置 */}
+      <div className='vendor-sidebar-header'>
+        <span className='vendor-sidebar-header-title'>{t('筛选')}</span>
+        <button
+          className='vendor-sidebar-header-reset'
+          onClick={handleResetAll}
         >
           {t('重置')}
-        </Button>
+        </button>
       </div>
 
-      <PricingVendors
-        filterVendor={filterVendor}
-        setFilterVendor={setFilterVendor}
-        models={vendorModels}
-        allModels={categoryProps.models}
-        loading={loading}
-        t={t}
-      />
+      {/* 筛选区 */}
+      <div className='vendor-sidebar-filters' style={{ marginTop: 4 }}>
+        <PricingEndpointTypes
+          filterEndpointType={filterEndpointType}
+          setFilterEndpointType={setFilterEndpointType}
+          models={endpointTypeModels || vendorModels}
+          allModels={categoryProps.models}
+          loading={loading}
+          t={t}
+        />
 
-      <PricingGroups
-        filterGroup={filterGroup}
-        setFilterGroup={handleGroupClick}
-        usableGroup={categoryProps.usableGroup}
-        groupRatio={categoryProps.groupRatio}
-        models={groupCountModels}
-        loading={loading}
-        t={t}
-      />
-
-      <PricingQuotaTypes
-        filterQuotaType={filterQuotaType}
-        setFilterQuotaType={setFilterQuotaType}
-        models={quotaTypeModels}
-        loading={loading}
-        t={t}
-      />
-
-      <PricingTags
-        filterTag={filterTag}
-        setFilterTag={setFilterTag}
-        models={tagModels}
-        allModels={categoryProps.models}
-        loading={loading}
-        t={t}
-      />
-
-      <PricingEndpointTypes
-        filterEndpointType={filterEndpointType}
-        setFilterEndpointType={setFilterEndpointType}
-        models={endpointTypeModels}
-        allModels={categoryProps.models}
-        loading={loading}
-        t={t}
-      />
+        <PricingTags
+          filterTag={filterTag}
+          setFilterTag={setFilterTag}
+          models={tagModels}
+          allModels={categoryProps.models}
+          loading={loading}
+          t={t}
+        />
+      </div>
     </div>
   );
 };

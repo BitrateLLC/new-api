@@ -27,6 +27,8 @@ export const useNavigation = (t, docsLink, headerNavModules) => {
       console: true,
       pricing: true,
       docs: true,
+      guide: true,
+      opensource: true,
       about: true,
     };
 
@@ -59,6 +61,16 @@ export const useNavigation = (t, docsLink, headerNavModules) => {
             },
           ]
         : []),
+      {
+        text: t('使用指南'),
+        itemKey: 'guide',
+        to: '/guide',
+      },
+      {
+        text: t('开源功能'),
+        itemKey: 'opensource',
+        to: '/opensource',
+      },
       {
         text: t('关于'),
         itemKey: 'about',

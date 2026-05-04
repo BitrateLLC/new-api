@@ -37,40 +37,15 @@ const AnnouncementsPanel = ({
   return (
     <Card
       {...CARD_PROPS}
-      className='shadow-sm !rounded-2xl lg:col-span-2'
+      className='db-glass-card lg:col-span-2'
       title={
-        <div className='flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2 w-full'>
-          <div className='flex items-center gap-2'>
-            <Bell size={16} />
+        <div className='db-card-title-row-between'>
+          <div className='db-card-title-row'>
+            <Bell size={16} style={{ color: 'var(--hp-accent)' }} />
             {t('系统公告')}
-            <Tag color='white' shape='circle'>
+            <Tag color='white' shape='circle' style={{ fontWeight: 400, fontSize: '0.75rem' }}>
               {t('显示最新20条')}
             </Tag>
-          </div>
-          {/* 图例 */}
-          <div className='flex flex-wrap gap-3 text-xs'>
-            {announcementLegendData.map((legend, index) => (
-              <div key={index} className='flex items-center gap-1'>
-                <div
-                  className='w-2 h-2 rounded-full'
-                  style={{
-                    backgroundColor:
-                      legend.color === 'grey'
-                        ? '#8b9aa7'
-                        : legend.color === 'blue'
-                          ? '#3b82f6'
-                          : legend.color === 'green'
-                            ? '#10b981'
-                            : legend.color === 'orange'
-                              ? '#f59e0b'
-                              : legend.color === 'red'
-                                ? '#ef4444'
-                                : '#8b9aa7',
-                  }}
-                />
-                <span className='text-gray-600'>{legend.label}</span>
-              </div>
-            ))}
           </div>
         </div>
       }
@@ -89,7 +64,8 @@ const AnnouncementsPanel = ({
                   extra={
                     item.extra ? (
                       <div
-                        className='text-xs text-gray-500'
+                        className='text-xs'
+                        style={{ color: 'var(--hp-sub)' }}
                         dangerouslySetInnerHTML={{ __html: htmlExtra }}
                       />
                     ) : null
@@ -119,6 +95,35 @@ const AnnouncementsPanel = ({
           </div>
         )}
       </ScrollableContainer>
+
+      {/* 公告状态图例 */}
+      {announcementLegendData && announcementLegendData.length > 0 && (
+        <div className='db-legend-bar'>
+          <div className='db-legend-items'>
+            {announcementLegendData.map((legend, index) => {
+              const colorMap = {
+                grey: 'var(--hp-muted)',
+                blue: 'var(--hp-accent)',
+                green: '#10b981',
+                orange: 'var(--hp-accent-dark)',
+                red: '#ef4444',
+              };
+              return (
+                <div key={index} className='db-legend-item'>
+                  <div
+                    className='db-legend-dot'
+                    style={{
+                      backgroundColor: colorMap[legend.color] || 'var(--hp-muted)',
+                      boxShadow: `0 0 0 2px ${colorMap[legend.color] || 'var(--hp-muted)'}33`,
+                    }}
+                  />
+                  <span className='db-legend-label'>{legend.label}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </Card>
   );
 };

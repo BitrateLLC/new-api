@@ -46,6 +46,7 @@ import { IconChevronDown, IconChevronUp } from '@douyinfe/semi-icons';
  * @param {boolean} withCheckbox 是否启用前缀 Checkbox 来控制激活状态
  * @param {boolean} loading 是否处于加载状态
  * @param {string} variant 颜色变体: 'violet' | 'teal' | 'amber' | 'rose' | 'green'，不传则使用默认蓝色
+ * @param {boolean} vertical 是否垂直排列，默认false
  */
 const SelectableButtonGroup = ({
   title,
@@ -59,6 +60,7 @@ const SelectableButtonGroup = ({
   withCheckbox = false,
   loading = false,
   variant,
+  vertical = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [skeletonCount] = useState(12);
@@ -89,6 +91,7 @@ const SelectableButtonGroup = ({
 
   // 基于容器宽度计算响应式列数和标签显示策略
   const getResponsiveConfig = () => {
+    if (vertical) return { columns: 1, showTags: true };
     if (containerWidth <= 280) return { columns: 1, showTags: true }; // 极窄：1列+标签
     if (containerWidth <= 380) return { columns: 2, showTags: true }; // 窄屏：2列+标签
     if (containerWidth <= 460) return { columns: 3, showTags: false }; // 中等：3列不加标签
@@ -105,6 +108,7 @@ const SelectableButtonGroup = ({
 
   // 计算 Semi UI Col 的 span 值
   const getColSpan = () => {
+    if (perRow <= 0) return 24;
     return Math.floor(24 / perRow);
   };
 
@@ -136,11 +140,12 @@ const SelectableButtonGroup = ({
   };
 
   const renderSkeletonButtons = () => {
-    const placeholder = (
-      <Row gutter={gutterSize} style={{ lineHeight: '32px', ...style }}>
-        {Array.from({ length: skeletonCount }).map((_, index) => (
-          <Col span={getColSpan()} key={index}>
+    if (vertical) {
+      const placeholder = (
+        <div style={{ ...style, lineHeight: '32px', display: 'flex', flexDirection: 'column', gap: gutterSize[0] }}>
+          {Array.from({ length: skeletonCount }).map((_, index) => (
             <div
+              key={index}
               style={{
                 width: '100%',
                 height: '32px',
@@ -148,7 +153,7 @@ const SelectableButtonGroup = ({
                 alignItems: 'center',
                 justifyContent: 'flex-start',
                 border: '1px solid var(--semi-color-border)',
-                borderRadius: 'var(--semi-border-radius-medium)',
+                borderRadius: '8px',
                 padding: '0 12px',
                 gap: '6px',
               }}
@@ -164,20 +169,116 @@ const SelectableButtonGroup = ({
                 }}
               />
             </div>
-          </Col>
-        ))}
-      </Row>
-    );
-
-    return (
-      <Skeleton loading={true} active placeholder={placeholder}></Skeleton>
-    );
+          ))}
+        </div>
+      );
+      return <Skeleton loading={true} active placeholder={placeholder}></Skeleton>;
+    } else {
+      const placeholder = (
+        <Row gutter={gutterSize} style={{ lineHeight: '32px', ...style }}>
+          {Array.from({ length: skeletonCount }).map((_, index) => (
+            <Col span={getColSpan()} key={index}>
+              <div
+                style={{
+                  width: '100%',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'flex-start',
+                  border: '1px solid var(--semi-color-border)',
+                  borderRadius: '8px',
+                  padding: '0 12px',
+                  gap: '6px',
+                }}
+              >
+                {withCheckbox && (
+                  <Skeleton.Title active style={{ width: 14, height: 14 }} />
+                )}
+                <Skeleton.Title
+                  active
+                  style={{
+                    width: `${60 + (index % 3) * 20}px`,
+                    height: 14,
+                  }}
+                />
+              </div>
+            </Col>
+          ))}
+        </Row>
+      );
+      return <Skeleton loading={true} active placeholder={placeholder}></Skeleton>;
+    }
   };
+
+  const rowStyle = vertical
+    ? { ...style, lineHeight: '32px', display: 'flex', flexDirection: 'column', gap: gutterSize[0] }
+    : { ...style, lineHeight: '32px' };
 
   const contentElement = showSkeleton ? (
     renderSkeletonButtons()
+  ) : vertical ? (
+    <div style={rowStyle}>
+      {items.map((item) => {
+        const isActive = Array.isArray(activeValue)
+          ? activeValue.includes(item.value)
+          : activeValue === item.value;
+
+        if (withCheckbox) {
+          return (
+            <Button
+              key={item.value}
+              onClick={() => {
+                /* disabled */
+              }}
+              theme={isActive ? 'light' : 'outline'}
+              type={isActive ? 'primary' : 'tertiary'}
+              className='sbg-button'
+              icon={
+                <Checkbox
+                  checked={isActive}
+                  onChange={() => onChange(item.value)}
+                  style={{ pointerEvents: 'auto' }}
+                />
+              }
+              style={{ width: '100%', cursor: 'default' }}
+            >
+              <div className='sbg-content'>
+                {item.icon && <span className='sbg-icon'>{item.icon}</span>}
+                <ConditionalTooltipText text={item.label} />
+                {item.tagCount !== undefined && shouldShowTags && (
+                  <span className={`sbg-badge ${isActive ? 'sbg-badge-active' : ''}`}>
+                    {item.tagCount}
+                  </span>
+                )}
+              </div>
+            </Button>
+          );
+        }
+
+        return (
+          <Button
+            key={item.value}
+            onClick={() => onChange(item.value)}
+            theme={isActive ? 'light' : 'outline'}
+            type={isActive ? 'primary' : 'tertiary'}
+            className='sbg-button'
+            style={{ width: '100%' }}
+          >
+            <div className='sbg-content'>
+              {item.icon && <span className='sbg-icon'>{item.icon}</span>}
+              <ConditionalTooltipText text={item.label} />
+              {item.tagCount !== undefined && shouldShowTags && item.tagCount !== '' && (
+                <span className={`sbg-badge ${isActive ? 'sbg-badge-active' : ''}`}>
+                  {item.tagCount}
+                </span>
+              )}
+            </div>
+          </Button>
+        );
+      })}
+    </div>
   ) : (
-    <Row gutter={gutterSize} style={{ lineHeight: '32px', ...style }}>
+    <Row style={rowStyle} gutter={gutterSize}>
       {items.map((item) => {
         const isActive = Array.isArray(activeValue)
           ? activeValue.includes(item.value)

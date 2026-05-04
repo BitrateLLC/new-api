@@ -259,13 +259,18 @@ export const useRedemptionsData = () => {
       content: t('将删除已使用、已禁用及过期的兑换码，此操作不可撤销。'),
       onOk: async () => {
         setLoading(true);
-        const res = await API.delete('/api/redemption/invalid');
-        const { success, message, data } = res.data;
-        if (success) {
-          showSuccess(t('已删除 {{count}} 条失效兑换码', { count: data }));
-          await refresh();
-        } else {
-          showError(message);
+        try {
+          const res = await API.delete('/api/redemption/invalid');
+          const { success, message, data } = res.data;
+          if (success) {
+            showSuccess(t('已删除 {{count}} 条失效兑换码', { count: data }));
+            await refresh();
+          } else {
+            showError(message);
+          }
+        } catch (error) {
+          console.error('Failed to batch delete redemptions:', error);
+          showError(error.message || 'Failed to batch delete redemptions');
         }
         setLoading(false);
       },

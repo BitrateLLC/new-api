@@ -67,13 +67,16 @@ const SettingsPanel = ({
         flexDirection: 'column',
       }}
     >
-      {/* 标题区域 - 与调试面板保持一致 */}
-      <div className='flex items-center justify-between mb-6 flex-shrink-0'>
-        <div className='flex items-center'>
-          <div className='w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center mr-3'>
-            <Settings size={20} className='text-white' />
+      {/* 标题区域 */}
+      <div className='flex items-center justify-between mb-5 flex-shrink-0'>
+        <div className='flex items-center gap-3'>
+          <div
+            className='w-8 h-8 rounded-full flex items-center justify-center'
+            style={{ background: 'rgba(var(--hp-accent-rgb), 0.12)' }}
+          >
+            <Settings size={16} style={{ color: 'var(--hp-accent)' }} />
           </div>
-          <Typography.Title heading={5} className='mb-0'>
+          <Typography.Title heading={6} className='mb-0' style={{ color: 'var(--hp-text)' }}>
             {t('模型配置')}
           </Typography.Title>
         </div>
@@ -116,12 +119,12 @@ const SettingsPanel = ({
         {/* 分组选择 */}
         <div className={customRequestMode ? 'opacity-50' : ''}>
           <div className='flex items-center gap-2 mb-2'>
-            <Users size={16} className='text-gray-500' />
-            <Typography.Text strong className='text-sm'>
+            <Users size={15} style={{ color: 'var(--hp-sub)' }} />
+            <Typography.Text strong className='text-sm' style={{ color: 'var(--hp-text)' }}>
               {t('分组')}
             </Typography.Text>
             {customRequestMode && (
-              <Typography.Text className='text-xs text-orange-600'>
+              <Typography.Text className='text-xs' style={{ color: 'var(--hp-sub)' }}>
                 ({t('已在自定义模式中忽略')})
               </Typography.Text>
             )}
@@ -138,9 +141,9 @@ const SettingsPanel = ({
             autoComplete='new-password'
             optionList={groups}
             renderOptionItem={renderGroupOption}
-            style={{ width: '100%' }}
+            style={{ width: '100%', borderRadius: '12px' }}
             dropdownStyle={{ width: '100%', maxWidth: '100%' }}
-            className='!rounded-lg'
+            className='!rounded-xl'
             disabled={customRequestMode}
           />
         </div>
@@ -148,12 +151,12 @@ const SettingsPanel = ({
         {/* 模型选择 */}
         <div className={customRequestMode ? 'opacity-50' : ''}>
           <div className='flex items-center gap-2 mb-2'>
-            <Sparkles size={16} className='text-gray-500' />
-            <Typography.Text strong className='text-sm'>
+            <Sparkles size={15} style={{ color: 'var(--hp-sub)' }} />
+            <Typography.Text strong className='text-sm' style={{ color: 'var(--hp-text)' }}>
               {t('模型')}
             </Typography.Text>
             {customRequestMode && (
-              <Typography.Text className='text-xs text-orange-600'>
+              <Typography.Text className='text-xs' style={{ color: 'var(--hp-sub)' }}>
                 ({t('已在自定义模式中忽略')})
               </Typography.Text>
             )}
@@ -169,9 +172,9 @@ const SettingsPanel = ({
             value={inputs.model}
             autoComplete='new-password'
             optionList={models}
-            style={{ width: '100%' }}
+            style={{ width: '100%', borderRadius: '12px' }}
             dropdownStyle={{ width: '100%', maxWidth: '100%' }}
-            className='!rounded-lg'
+            className='!rounded-xl'
             disabled={customRequestMode}
           />
         </div>
@@ -202,14 +205,17 @@ const SettingsPanel = ({
 
         {/* 流式输出开关 */}
         <div className={customRequestMode ? 'opacity-50' : ''}>
-          <div className='flex items-center justify-between'>
+          <div
+            className='flex items-center justify-between px-3 py-2.5 rounded-xl'
+            style={{ background: 'var(--hp-bg-soft)', border: '1px solid var(--hp-border)' }}
+          >
             <div className='flex items-center gap-2'>
-              <ToggleLeft size={16} className='text-gray-500' />
-              <Typography.Text strong className='text-sm'>
+              <ToggleLeft size={15} style={{ color: 'var(--hp-sub)' }} />
+              <Typography.Text strong className='text-sm' style={{ color: 'var(--hp-text)' }}>
                 {t('流式输出')}
               </Typography.Text>
               {customRequestMode && (
-                <Typography.Text className='text-xs text-orange-600'>
+                <Typography.Text className='text-xs' style={{ color: 'var(--hp-sub)' }}>
                   ({t('已在自定义模式中忽略')})
                 </Typography.Text>
               )}

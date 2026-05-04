@@ -295,7 +295,7 @@ const ExtendDurationModal = ({
     <Modal
       title={
         <div className='flex items-center gap-2'>
-          <FaClock className='text-blue-500' />
+          <FaClock className='text-orange-500' />
           <span>{t('延长容器时长')}</span>
         </div>
       }
@@ -486,9 +486,9 @@ const ExtendDurationModal = ({
                 </Text>
               </div>
 
-              <div className='bg-blue-50 p-3 rounded-lg'>
+              <div className='bg-orange-50 p-3 rounded-lg'>
                 <div className='flex items-start gap-2'>
-                  <FaInfoCircle className='text-blue-500 mt-0.5' />
+                  <FaInfoCircle className='text-orange-500 mt-0.5' />
                   <div>
                     <Text size='small' type='secondary'>
                       {t('延长后总时长')}: <Text strong>{newTotalTime}</Text>

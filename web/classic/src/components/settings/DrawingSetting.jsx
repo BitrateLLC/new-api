@@ -36,7 +36,8 @@ const DrawingSetting = () => {
   let [loading, setLoading] = useState(false);
 
   const getOptions = async () => {
-    const res = await API.get('/api/option/');
+    try {
+      const res = await API.get('/api/option/');
     const { success, message, data } = res.data;
     if (success) {
       let newInputs = {};
@@ -51,6 +52,9 @@ const DrawingSetting = () => {
       setInputs(newInputs);
     } else {
       showError(message);
+    }
+    } catch (err) {
+      console.error('Failed to load options:', err);
     }
   };
 

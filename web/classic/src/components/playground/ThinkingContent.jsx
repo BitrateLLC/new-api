@@ -71,97 +71,153 @@ const ThinkingContent = ({
   }
 
   return (
-    <div className='rounded-xl sm:rounded-2xl mb-2 sm:mb-4 overflow-hidden shadow-sm backdrop-blur-sm'>
+    <div
+      style={{
+        borderRadius: '12px',
+        marginBottom: '12px',
+        overflow: 'hidden',
+        border: '1px solid var(--hp-border)',
+        background: 'var(--hp-bg-soft)',
+        transition: 'all 0.2s ease',
+      }}
+    >
+      {/* Header */}
       <div
-        className='flex items-center justify-between p-3 cursor-pointer hover:bg-gradient-to-r hover:from-white/20 hover:to-purple-50/30 transition-all'
         style={{
-          background:
-            'linear-gradient(135deg, #4c1d95 0%, #6d28d9 50%, #7c3aed 100%)',
-          position: 'relative',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '12px 16px',
+          cursor: 'pointer',
+          borderBottom: message.isReasoningExpanded
+            ? '1px solid var(--hp-border)'
+            : 'none',
+          transition: 'all 0.2s ease',
         }}
         onClick={() => onToggleReasoningExpansion(message.id)}
       >
-        <div className='absolute inset-0 overflow-hidden'>
-          <div className='absolute -top-10 -right-10 w-40 h-40 bg-white opacity-5 rounded-full'></div>
-          <div className='absolute -bottom-8 -left-8 w-24 h-24 bg-white opacity-10 rounded-full'></div>
-        </div>
-        <div className='flex items-center gap-2 sm:gap-4 relative'>
-          <div className='w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-white/20 flex items-center justify-center shadow-lg'>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div
+            style={{
+              width: '28px',
+              height: '28px',
+              borderRadius: '8px',
+              background: 'var(--hp-border)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              transition: 'all 0.2s ease',
+            }}
+          >
             <Brain
-              style={{ color: 'white' }}
-              size={styleState.isMobile ? 12 : 16}
+              size={styleState.isMobile ? 12 : 14}
+              style={{ color: 'var(--hp-sub)' }}
             />
           </div>
-          <div className='flex flex-col'>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
             <Typography.Text
               strong
-              style={{ color: 'white' }}
-              className='text-sm sm:text-base'
+              style={{
+                color: 'var(--hp-text)',
+                fontSize: styleState.isMobile ? '13px' : '14px',
+              }}
             >
               {headerText}
             </Typography.Text>
             {thinkingSource && (
               <Typography.Text
-                style={{ color: 'white' }}
-                className='text-xs mt-0.5 opacity-80 hidden sm:block'
+                style={{
+                  color: 'var(--hp-sub)',
+                  fontSize: '11px',
+                }}
               >
                 来源: {thinkingSource}
               </Typography.Text>
             )}
           </div>
         </div>
-        <div className='flex items-center gap-2 sm:gap-3 relative'>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {isThinkingStatus && !message.isThinkingComplete && (
-            <div className='flex items-center gap-1 sm:gap-2'>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Loader2
-                style={{ color: 'white' }}
+                style={{ color: 'var(--hp-sub)' }}
                 className='animate-spin'
-                size={styleState.isMobile ? 14 : 18}
+                size={styleState.isMobile ? 13 : 15}
               />
               <Typography.Text
-                style={{ color: 'white' }}
-                className='text-xs sm:text-sm font-medium opacity-90'
+                style={{
+                  color: 'var(--hp-sub)',
+                  fontSize: styleState.isMobile ? '11px' : '12px',
+                }}
               >
                 思考中
               </Typography.Text>
             </div>
           )}
           {(!isThinkingStatus || message.isThinkingComplete) && (
-            <div className='w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-white/20 flex items-center justify-center'>
+            <div
+              style={{
+                width: '22px',
+                height: '22px',
+                borderRadius: '6px',
+                background: 'var(--hp-border)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s ease',
+              }}
+            >
               {message.isReasoningExpanded ? (
                 <ChevronUp
-                  size={styleState.isMobile ? 12 : 16}
-                  style={{ color: 'white' }}
+                  size={styleState.isMobile ? 12 : 14}
+                  style={{ color: 'var(--hp-sub)' }}
                 />
               ) : (
                 <ChevronRight
-                  size={styleState.isMobile ? 12 : 16}
-                  style={{ color: 'white' }}
+                  size={styleState.isMobile ? 12 : 14}
+                  style={{ color: 'var(--hp-sub)' }}
                 />
               )}
             </div>
           )}
         </div>
       </div>
+
+      {/* Expandable content */}
       <div
-        className={`transition-all duration-500 ease-out ${
-          message.isReasoningExpanded
-            ? 'max-h-96 opacity-100'
-            : 'max-h-0 opacity-0'
-        } overflow-hidden bg-gradient-to-br from-purple-50 via-indigo-50 to-violet-50`}
+        style={{
+          maxHeight: message.isReasoningExpanded ? '320px' : '0px',
+          opacity: message.isReasoningExpanded ? 1 : 0,
+          overflow: 'hidden',
+          transition: 'max-height 0.4s ease, opacity 0.3s ease',
+        }}
       >
         {message.isReasoningExpanded && (
-          <div className='p-3 sm:p-5 pt-2 sm:pt-4'>
+          <div style={{ padding: '12px 16px' }}>
             <div
               ref={scrollRef}
-              className='bg-white/70 backdrop-blur-sm rounded-lg sm:rounded-xl p-2 shadow-inner overflow-x-auto overflow-y-auto thinking-content-scroll'
               style={{
-                maxHeight: '200px',
+                background: 'var(--hp-bg-soft)',
+                borderLeft: '2px dashed var(--hp-border)',
+                borderRadius: '12px',
+                padding: '12px 16px',
+                maxHeight: '220px',
+                overflowX: 'auto',
+                overflowY: 'auto',
                 scrollbarWidth: 'thin',
-                scrollbarColor: 'rgba(0, 0, 0, 0.3) transparent',
+                scrollbarColor: 'var(--hp-border) transparent',
+                transition: 'all 0.2s ease',
               }}
             >
-              <div className='prose prose-xs sm:prose-sm prose-purple max-w-none text-xs sm:text-sm'>
+              <div
+                style={{
+                  fontSize: styleState.isMobile ? '12px' : '13px',
+                  lineHeight: '1.6',
+                  color: 'var(--hp-text)',
+                }}
+              >
                 <MarkdownRenderer
                   content={finalExtractedThinkingContent}
                   className=''

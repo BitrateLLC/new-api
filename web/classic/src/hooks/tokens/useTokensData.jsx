@@ -42,7 +42,6 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
   // Basic state
   const [tokens, setTokens] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [groupRatios, setGroupRatios] = useState({});
   const [activePage, setActivePage] = useState(1);
   const [tokenCount, setTokenCount] = useState(0);
   const [pageSize, setPageSize] = useState(ITEMS_PER_PAGE);
@@ -104,12 +103,17 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
   const loadTokens = async (page = 1, size = pageSize) => {
     setLoading(true);
     setSearchMode(false);
-    const res = await API.get(`/api/token/?p=${page}&size=${size}`);
-    const { success, message, data } = res.data;
-    if (success) {
-      syncPageData(data);
-    } else {
-      showError(message);
+    try {
+      const res = await API.get(`/api/token/?p=${page}&size=${size}`);
+      const { success, message, data } = res.data;
+      if (success) {
+        syncPageData(data);
+      } else {
+        showError(message);
+      }
+    } catch (error) {
+      console.error('Failed to load tokens:', error);
+      showError(error.message || 'Failed to load tokens');
     }
     setLoading(false);
   };
@@ -265,30 +269,35 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
     setLoading(true);
     let data = { id };
     let res;
-    switch (action) {
-      case 'delete':
-        res = await API.delete(`/api/token/${id}/`);
-        break;
-      case 'enable':
-        data.status = 1;
-        res = await API.put('/api/token/?status_only=true', data);
-        break;
-      case 'disable':
-        data.status = 2;
-        res = await API.put('/api/token/?status_only=true', data);
-        break;
-    }
-    const { success, message } = res.data;
-    if (success) {
-      showSuccess(t('操作成功完成！'));
-      let token = res.data.data;
-      let newTokens = [...tokens];
-      if (action !== 'delete') {
-        record.status = token.status;
+    try {
+      switch (action) {
+        case 'delete':
+          res = await API.delete(`/api/token/${id}/`);
+          break;
+        case 'enable':
+          data.status = 1;
+          res = await API.put('/api/token/?status_only=true', data);
+          break;
+        case 'disable':
+          data.status = 2;
+          res = await API.put('/api/token/?status_only=true', data);
+          break;
       }
-      setTokens(newTokens);
-    } else {
-      showError(message);
+      const { success, message } = res.data;
+      if (success) {
+        showSuccess(t('操作成功完成！'));
+        let token = res.data.data;
+        let newTokens = [...tokens];
+        if (action !== 'delete') {
+          record.status = token.status;
+        }
+        setTokens(newTokens);
+      } else {
+        showError(message);
+      }
+    } catch (error) {
+      console.error('Failed to manage token:', error);
+      showError(error.message || 'Failed to manage token');
     }
     setLoading(false);
   };
@@ -306,15 +315,20 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
       return;
     }
     setSearching(true);
-    const res = await API.get(
-      `/api/token/search?keyword=${encodeURIComponent(searchKeyword)}&token=${encodeURIComponent(searchToken)}&p=${normalizedPage}&size=${normalizedSize}`,
-    );
-    const { success, message, data } = res.data;
-    if (success) {
-      setSearchMode(true);
-      syncPageData(data);
-    } else {
-      showError(message);
+    try {
+      const res = await API.get(
+        `/api/token/search?keyword=${encodeURIComponent(searchKeyword)}&token=${encodeURIComponent(searchToken)}&p=${normalizedPage}&size=${normalizedSize}`,
+      );
+      const { success, message, data } = res.data;
+      if (success) {
+        setSearchMode(true);
+        syncPageData(data);
+      } else {
+        showError(message);
+      }
+    } catch (error) {
+      console.error('Failed to search tokens:', error);
+      showError(error.message || 'Failed to search tokens');
     }
     setSearching(false);
   };
@@ -438,17 +452,6 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
       .catch((reason) => {
         showError(reason);
       });
-    API.get('/api/user/self/groups')
-      .then((res) => {
-        if (res.data.success && res.data.data) {
-          const ratios = {};
-          for (const [name, info] of Object.entries(res.data.data)) {
-            ratios[name] = info.ratio;
-          }
-          setGroupRatios(ratios);
-        }
-      })
-      .catch(() => {});
   }, [pageSize]);
 
   return {
@@ -459,7 +462,6 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
     tokenCount,
     pageSize,
     searching,
-    groupRatios,
 
     // Selection state
     selectedKeys,

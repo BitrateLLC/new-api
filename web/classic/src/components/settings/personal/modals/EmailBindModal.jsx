@@ -41,7 +41,7 @@ const EmailBindModal = ({
     <Modal
       title={
         <div className='flex items-center'>
-          <IconMail className='mr-2 text-blue-500' />
+          <IconMail className='mr-2' style={{ color: 'var(--hp-accent)' }} />
           {t('绑定邮箱地址')}
         </div>
       }

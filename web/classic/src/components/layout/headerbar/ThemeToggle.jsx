@@ -17,13 +17,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback, useRef } from 'react';
 import { Button, Dropdown } from '@douyinfe/semi-ui';
 import { Sun, Moon, Monitor } from 'lucide-react';
 import { useActualTheme } from '../../../context/Theme';
 
 const ThemeToggle = ({ theme, onThemeToggle, t }) => {
   const actualTheme = useActualTheme();
+  const btnRef = useRef(null);
 
   const themeOptions = useMemo(
     () => [
@@ -62,6 +63,61 @@ const ThemeToggle = ({ theme, onThemeToggle, t }) => {
     return currentOption?.buttonIcon || themeOptions[2].buttonIcon;
   }, [theme, themeOptions]);
 
+  const handleThemeWithTransition = useCallback(
+    (newTheme) => {
+      if (newTheme === theme) return;
+
+      try {
+        // 按钮图标旋转 + 缩放弹跳动画
+        const btn = btnRef.current;
+        if (btn) {
+          btn.classList.add('theme-toggle-morph');
+          setTimeout(() => btn.classList.remove('theme-toggle-morph'), 500);
+        }
+
+        const isDarkTarget = newTheme === 'dark' ||
+          (newTheme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+        const bg = isDarkTarget ? '#1c1c1e' : '#ffffff';
+        const fromTopRight = isDarkTarget;
+        const animIn = fromTopRight ? 'curtain-in-from-topright' : 'curtain-in-from-bottomleft';
+        const animOut = fromTopRight ? 'curtain-out-to-bottomleft' : 'curtain-out-to-topright';
+
+        const curtain = document.createElement('div');
+        curtain.style.cssText = `
+          position: fixed;
+          top: 0; left: 0;
+          width: 100vw; height: 100vh;
+          z-index: 999;
+          pointer-events: none;
+          background: ${bg};
+          animation: ${animIn} 0.75s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        `;
+        document.body.appendChild(curtain);
+
+        // 帘幕覆盖到一半时切换主题
+        setTimeout(() => {
+          onThemeToggle(newTheme);
+        }, 375);
+
+        // 帘幕完全覆盖后，切换为滑出动画
+        setTimeout(() => {
+          curtain.style.animation = `${animOut} 0.75s cubic-bezier(0.4, 0, 0.2, 1) forwards`;
+        }, 750);
+
+        // 滑出完成后移除
+        setTimeout(() => {
+          curtain.remove();
+        }, 1550);
+
+      } catch (e) {
+        console.warn('Theme curtain animation failed:', e);
+        onThemeToggle(newTheme);
+      }
+    },
+    [theme, onThemeToggle],
+  );
+
   return (
     <Dropdown
       position='bottomRight'
@@ -71,7 +127,7 @@ const ThemeToggle = ({ theme, onThemeToggle, t }) => {
             <Dropdown.Item
               key={option.key}
               icon={option.icon}
-              onClick={() => onThemeToggle(option.key)}
+              onClick={() => handleThemeWithTransition(option.key)}
               className={getItemClassName(theme === option.key)}
             >
               <div className='flex flex-col'>
@@ -95,15 +151,14 @@ const ThemeToggle = ({ theme, onThemeToggle, t }) => {
         </Dropdown.Menu>
       }
     >
-      <span className='inline-flex'>
-        <Button
-          icon={currentButtonIcon}
-          aria-label={t('切换主题')}
-          theme='borderless'
-          type='tertiary'
-          className='!p-1.5 !text-current focus:!bg-semi-color-fill-1 !rounded-full !bg-semi-color-fill-0 hover:!bg-semi-color-fill-1'
-        />
-      </span>
+      <Button
+        ref={btnRef}
+        icon={currentButtonIcon}
+        aria-label={t('切换主题')}
+        theme='borderless'
+        type='tertiary'
+        className='!p-1.5 !text-current focus:!bg-semi-color-fill-1 !rounded-full !bg-semi-color-fill-0 hover:!bg-semi-color-fill-1'
+      />
     </Dropdown>
   );
 };

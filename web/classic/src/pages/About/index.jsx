@@ -35,17 +35,22 @@ const About = () => {
 
   const displayAbout = async () => {
     setAbout(localStorage.getItem('about') || '');
-    const res = await API.get('/api/about');
-    const { success, message, data } = res.data;
-    if (success) {
-      let aboutContent = data;
-      if (!data.startsWith('https://')) {
-        aboutContent = marked.parse(data);
+    try {
+      const res = await API.get('/api/about');
+      const { success, message, data } = res.data;
+      if (success) {
+        let aboutContent = data;
+        if (!data.startsWith('https://')) {
+          aboutContent = marked.parse(data);
+        }
+        setAbout(aboutContent);
+        localStorage.setItem('about', aboutContent);
+      } else {
+        showError(message);
+        setAbout(t('加载关于内容失败...'));
       }
-      setAbout(aboutContent);
-      localStorage.setItem('about', aboutContent);
-    } else {
-      showError(message);
+    } catch (err) {
+      console.error('Failed to load about:', err);
       setAbout(t('加载关于内容失败...'));
     }
     setAboutLoaded(true);

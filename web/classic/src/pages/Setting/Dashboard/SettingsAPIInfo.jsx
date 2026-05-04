@@ -85,16 +85,20 @@ const SettingsAPIInfo = ({ options, refresh }) => {
   ];
 
   const updateOption = async (key, value) => {
-    const res = await API.put('/api/option/', {
-      key,
-      value,
-    });
-    const { success, message } = res.data;
-    if (success) {
-      showSuccess('API信息已更新');
-      if (refresh) refresh();
-    } else {
-      showError(message);
+    try {
+      const res = await API.put('/api/option/', {
+        key,
+        value,
+      });
+      const { success, message } = res.data;
+      if (success) {
+        showSuccess('API信息已更新');
+        if (refresh) refresh();
+      } else {
+        showError(message);
+      }
+    } catch (err) {
+      console.error('Failed to update option:', err);
     }
   };
 
@@ -317,7 +321,7 @@ const SettingsAPIInfo = ({ options, refresh }) => {
   const renderHeader = () => (
     <div className='flex flex-col w-full'>
       <div className='mb-2'>
-        <div className='flex items-center text-blue-500'>
+        <div className='flex items-center text-orange-500'>
           <Settings size={16} className='mr-2' />
           <Text>
             {t(

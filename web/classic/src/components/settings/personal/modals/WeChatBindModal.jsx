@@ -48,7 +48,7 @@ const WeChatBindModal = ({
     >
       <div className='space-y-4 py-4 text-center'>
         <Image src={status.wechat_qrcode} className='mx-auto' />
-        <div className='text-gray-600'>
+        <div style={{color:'var(--hp-sub)'}}>
           <p>
             {t('微信扫码关注公众号，输入「验证码」获取验证码（三分钟内有效）')}
           </p>
@@ -67,7 +67,7 @@ const WeChatBindModal = ({
           theme='solid'
           size='large'
           onClick={bindWeChat}
-          className='!rounded-lg w-full !bg-slate-600 hover:!bg-slate-700'
+          className='!rounded-lg w-full' style={{ background: 'var(--hp-accent)', borderColor: 'var(--hp-accent)' }}
           icon={<SiWechat size={16} />}
         >
           {t('绑定')}

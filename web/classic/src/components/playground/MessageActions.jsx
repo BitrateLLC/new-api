@@ -46,6 +46,9 @@ const MessageActions = ({
     typeof onMessageEdit === 'function' &&
     !isEditing;
 
+  const btnSize = styleState.isMobile ? '!w-6 !h-6' : '!w-7 !h-7';
+  const disabledCls = '!cursor-not-allowed';
+
   return (
     <div className='flex items-center gap-0.5'>
       {!isLoading && (
@@ -60,7 +63,8 @@ const MessageActions = ({
             icon={<RefreshCw size={styleState.isMobile ? 12 : 14} />}
             onClick={() => !shouldDisableActions && onMessageReset(message)}
             disabled={shouldDisableActions}
-            className={`!rounded-full ${shouldDisableActions ? '!text-gray-300 !cursor-not-allowed' : '!text-gray-400 hover:!text-blue-600 hover:!bg-blue-50'} ${styleState.isMobile ? '!w-6 !h-6' : '!w-7 !h-7'} !p-0 transition-all`}
+            className={`!rounded-full ${btnSize} !p-0 transition-all duration-200`}
+            style={shouldDisableActions ? { color: 'var(--hp-muted)', cursor: 'not-allowed' } : { color: 'var(--hp-sub)' }}
             aria-label={t('重试')}
           />
         </Tooltip>
@@ -74,7 +78,8 @@ const MessageActions = ({
             size='small'
             icon={<Copy size={styleState.isMobile ? 12 : 14} />}
             onClick={() => onMessageCopy(message)}
-            className={`!rounded-full !text-gray-400 hover:!text-green-600 hover:!bg-green-50 ${styleState.isMobile ? '!w-6 !h-6' : '!w-7 !h-7'} !p-0 transition-all`}
+            className={`!rounded-full ${btnSize} !p-0 transition-all duration-200`}
+            style={{ color: 'var(--hp-sub)' }}
             aria-label={t('复制')}
           />
         </Tooltip>
@@ -92,7 +97,8 @@ const MessageActions = ({
             icon={<Edit size={styleState.isMobile ? 12 : 14} />}
             onClick={() => !shouldDisableActions && onMessageEdit(message)}
             disabled={shouldDisableActions}
-            className={`!rounded-full ${shouldDisableActions ? '!text-gray-300 !cursor-not-allowed' : '!text-gray-400 hover:!text-yellow-600 hover:!bg-yellow-50'} ${styleState.isMobile ? '!w-6 !h-6' : '!w-7 !h-7'} !p-0 transition-all`}
+            className={`!rounded-full ${btnSize} !p-0 transition-all duration-200`}
+            style={shouldDisableActions ? { color: 'var(--hp-muted)', cursor: 'not-allowed' } : { color: 'var(--hp-sub)' }}
             aria-label={t('编辑')}
           />
         </Tooltip>
@@ -118,7 +124,8 @@ const MessageActions = ({
               !shouldDisableActions && onRoleToggle && onRoleToggle(message)
             }
             disabled={shouldDisableActions}
-            className={`!rounded-full ${shouldDisableActions ? '!text-gray-300 !cursor-not-allowed' : message.role === 'system' ? '!text-purple-500 hover:!text-purple-700 hover:!bg-purple-50' : '!text-gray-400 hover:!text-purple-600 hover:!bg-purple-50'} ${styleState.isMobile ? '!w-6 !h-6' : '!w-7 !h-7'} !p-0 transition-all`}
+            className={`!rounded-full ${btnSize} !p-0 transition-all duration-200`}
+            style={shouldDisableActions ? { color: 'var(--hp-muted)', cursor: 'not-allowed' } : { color: 'var(--hp-sub)' }}
             aria-label={
               message.role === 'assistant'
                 ? t('切换为System角色')
@@ -140,7 +147,8 @@ const MessageActions = ({
             icon={<Trash2 size={styleState.isMobile ? 12 : 14} />}
             onClick={() => !shouldDisableActions && onMessageDelete(message)}
             disabled={shouldDisableActions}
-            className={`!rounded-full ${shouldDisableActions ? '!text-gray-300 !cursor-not-allowed' : '!text-gray-400 hover:!text-red-600 hover:!bg-red-50'} ${styleState.isMobile ? '!w-6 !h-6' : '!w-7 !h-7'} !p-0 transition-all`}
+            className={`!rounded-full ${btnSize} !p-0 transition-all duration-200`}
+            style={shouldDisableActions ? { color: 'var(--hp-muted)', cursor: 'not-allowed' } : { color: 'var(--hp-sub)' }}
             aria-label={t('删除')}
           />
         </Tooltip>

@@ -53,6 +53,7 @@ const ModelSetting = () => {
   let [loading, setLoading] = useState(false);
 
   const getOptions = async () => {
+    try {
     const res = await API.get('/api/option/');
     const { success, message, data } = res.data;
     if (success) {
@@ -87,6 +88,9 @@ const ModelSetting = () => {
       setInputs(newInputs);
     } else {
       showError(message);
+    }
+    } catch (err) {
+      console.error('Failed to load options:', err);
     }
   };
   async function onRefresh() {

@@ -330,46 +330,58 @@ export const useChannelsData = () => {
     const { searchKeyword, searchGroup, searchModel } = getFormValues();
     if (searchKeyword !== '' || searchGroup !== '' || searchModel !== '') {
       setLoading(true);
-      await searchChannels(
-        enableTagMode,
-        typeKey,
-        statusF,
-        page,
-        pageSize,
-        idSort,
-      );
-      setLoading(false);
+      try {
+        await searchChannels(
+          enableTagMode,
+          typeKey,
+          statusF,
+          page,
+          pageSize,
+          idSort,
+        );
+      } catch (error) {
+        console.error('Failed to search channels:', error);
+        showError(error.message || 'Failed to search channels');
+      } finally {
+        setLoading(false);
+      }
       return;
     }
 
     const reqId = ++requestCounter.current;
     setLoading(true);
-    const typeParam = typeKey !== 'all' ? `&type=${typeKey}` : '';
-    const statusParam = statusF !== 'all' ? `&status=${statusF}` : '';
-    const res = await API.get(
-      `/api/channel/?p=${page}&page_size=${pageSize}&id_sort=${idSort}&tag_mode=${enableTagMode}${typeParam}${statusParam}`,
-    );
+    try {
+      const typeParam = typeKey !== 'all' ? `&type=${typeKey}` : '';
+      const statusParam = statusF !== 'all' ? `&status=${statusF}` : '';
+      const res = await API.get(
+        `/api/channel/?p=${page}&page_size=${pageSize}&id_sort=${idSort}&tag_mode=${enableTagMode}${typeParam}${statusParam}`,
+      );
 
-    if (res === undefined || reqId !== requestCounter.current) {
-      return;
-    }
-
-    const { success, message, data } = res.data;
-    if (success) {
-      const { items, total, type_counts } = data;
-      if (type_counts) {
-        const sumAll = Object.values(type_counts).reduce(
-          (acc, v) => acc + v,
-          0,
-        );
-        setTypeCounts({ ...type_counts, all: sumAll });
+      if (res === undefined || reqId !== requestCounter.current) {
+        return;
       }
-      setChannelFormat(items, enableTagMode);
-      setChannelCount(total);
-    } else {
-      showError(message);
+
+      const { success, message, data } = res.data;
+      if (success) {
+        const { items, total, type_counts } = data;
+        if (type_counts) {
+          const sumAll = Object.values(type_counts).reduce(
+            (acc, v) => acc + v,
+            0,
+          );
+          setTypeCounts({ ...type_counts, all: sumAll });
+        }
+        setChannelFormat(items, enableTagMode);
+        setChannelCount(total);
+      } else {
+        showError(message);
+      }
+    } catch (error) {
+      console.error('Failed to load channels:', error);
+      showError(error.message || 'Failed to load channels');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   // Search channels
@@ -415,6 +427,9 @@ export const useChannelsData = () => {
       } else {
         showError(message);
       }
+    } catch (error) {
+      console.error('Failed to search channels:', error);
+      showError(error.message || 'Failed to search channels');
     } finally {
       setSearching(false);
     }
@@ -422,18 +437,23 @@ export const useChannelsData = () => {
 
   // Refresh
   const refresh = async (page = activePage) => {
-    const { searchKeyword, searchGroup, searchModel } = getFormValues();
-    if (searchKeyword === '' && searchGroup === '' && searchModel === '') {
-      await loadChannels(page, pageSize, idSort, enableTagMode);
-    } else {
-      await searchChannels(
-        enableTagMode,
-        activeTypeKey,
-        statusFilter,
-        page,
-        pageSize,
-        idSort,
-      );
+    try {
+      const { searchKeyword, searchGroup, searchModel } = getFormValues();
+      if (searchKeyword === '' && searchGroup === '' && searchModel === '') {
+        await loadChannels(page, pageSize, idSort, enableTagMode);
+      } else {
+        await searchChannels(
+          enableTagMode,
+          activeTypeKey,
+          statusFilter,
+          page,
+          pageSize,
+          idSort,
+        );
+      }
+    } catch (error) {
+      console.error('Failed to refresh channels:', error);
+      showError(error.message || 'Failed to refresh channels');
     }
   };
 
@@ -443,76 +463,86 @@ export const useChannelsData = () => {
   const manageChannel = async (id, action, record, value) => {
     let data = { id };
     let res;
-    switch (action) {
-      case 'delete':
-        res = await API.delete(`/api/channel/${id}/`);
-        break;
-      case 'enable':
-        data.status = 1;
-        res = await API.put('/api/channel/', data);
-        break;
-      case 'disable':
-        data.status = 2;
-        res = await API.put('/api/channel/', data);
-        break;
-      case 'priority':
-        if (value === '') return;
-        data.priority = parseInt(value);
-        res = await API.put('/api/channel/', data);
-        break;
-      case 'weight':
-        if (value === '') return;
-        data.weight = parseInt(value);
-        if (data.weight < 0) data.weight = 0;
-        res = await API.put('/api/channel/', data);
-        break;
-      case 'enable_all':
-        data.channel_info = record.channel_info;
-        data.channel_info.multi_key_status_list = {};
-        res = await API.put('/api/channel/', data);
-        break;
-    }
-    const { success, message } = res.data;
-    if (success) {
-      showSuccess(t('操作成功完成！'));
-      let channel = res.data.data;
-      let newChannels = [...channels];
-      if (action !== 'delete') {
-        record.status = channel.status;
+    try {
+      switch (action) {
+        case 'delete':
+          res = await API.delete(`/api/channel/${id}/`);
+          break;
+        case 'enable':
+          data.status = 1;
+          res = await API.put('/api/channel/', data);
+          break;
+        case 'disable':
+          data.status = 2;
+          res = await API.put('/api/channel/', data);
+          break;
+        case 'priority':
+          if (value === '') return;
+          data.priority = parseInt(value);
+          res = await API.put('/api/channel/', data);
+          break;
+        case 'weight':
+          if (value === '') return;
+          data.weight = parseInt(value);
+          if (data.weight < 0) data.weight = 0;
+          res = await API.put('/api/channel/', data);
+          break;
+        case 'enable_all':
+          data.channel_info = record.channel_info;
+          data.channel_info.multi_key_status_list = {};
+          res = await API.put('/api/channel/', data);
+          break;
       }
-      setChannels(newChannels);
-    } else {
-      showError(message);
+      const { success, message } = res.data;
+      if (success) {
+        showSuccess(t('操作成功完成！'));
+        let channel = res.data.data;
+        let newChannels = [...channels];
+        if (action !== 'delete') {
+          record.status = channel.status;
+        }
+        setChannels(newChannels);
+      } else {
+        showError(message);
+      }
+    } catch (error) {
+      console.error('Failed to manage channel:', error);
+      showError(error.message || 'Failed to manage channel');
     }
   };
 
   // Tag management
   const manageTag = async (tag, action) => {
     let res;
-    switch (action) {
-      case 'enable':
-        res = await API.post('/api/channel/tag/enabled', { tag: tag });
-        break;
-      case 'disable':
-        res = await API.post('/api/channel/tag/disabled', { tag: tag });
-        break;
-    }
-    const { success, message } = res.data;
-    if (success) {
-      showSuccess(t('操作成功完成！'));
-      let newChannels = [...channels];
-      for (let i = 0; i < newChannels.length; i++) {
-        if (newChannels[i].tag === tag) {
-          let status = action === 'enable' ? 1 : 2;
-          newChannels[i]?.children?.forEach((channel) => {
-            channel.status = status;
-          });
-          newChannels[i].status = status;
-        }
+    try {
+      switch (action) {
+        case 'enable':
+          res = await API.post('/api/channel/tag/enabled', { tag: tag });
+          break;
+        case 'disable':
+          res = await API.post('/api/channel/tag/disabled', { tag: tag });
+          break;
       }
-      setChannels(newChannels);
-    } else {
-      showError(message);
+      const { success, message } = res.data;
+      if (success) {
+        showSuccess(t('操作成功完成！'));
+        let newChannels = [...channels];
+        for (let i = 0; i < newChannels.length; i++) {
+          if (newChannels[i].tag === tag) {
+            let status = action === 'enable' ? 1 : 2;
+            newChannels[i]?.children?.forEach((channel) => {
+              channel.status = status;
+            });
+            newChannels[i].status = status;
+          }
+        }
+        setChannels(newChannels);
+      } else {
+        showError(message);
+      }
+    } catch (error) {
+      console.error('Failed to manage tag:', error);
+      showError(error.message || 'Failed to manage tag');
     }
   };
 
@@ -677,19 +707,24 @@ export const useChannelsData = () => {
       showError(t('标签不能为空！'));
       return;
     }
-    let ids = selectedChannels.map((channel) => channel.id);
-    const res = await API.post('/api/channel/batch/tag', {
-      ids: ids,
-      tag: batchSetTagValue === '' ? null : batchSetTagValue,
-    });
-    if (res.data.success) {
-      showSuccess(
-        t('已为 ${count} 个渠道设置标签！').replace('${count}', res.data.data),
-      );
-      await refresh();
-      setShowBatchSetTag(false);
-    } else {
-      showError(res.data.message);
+    try {
+      let ids = selectedChannels.map((channel) => channel.id);
+      const res = await API.post('/api/channel/batch/tag', {
+        ids: ids,
+        tag: batchSetTagValue === '' ? null : batchSetTagValue,
+      });
+      if (res.data.success) {
+        showSuccess(
+          t('已为 ${count} 个渠道设置标签！').replace('${count}', res.data.data),
+        );
+        await refresh();
+        setShowBatchSetTag(false);
+      } else {
+        showError(res.data.message);
+      }
+    } catch (error) {
+      console.error('Failed to batch set channel tag:', error);
+      showError(error.message || 'Failed to batch set channel tag');
     }
   };
 
@@ -699,57 +734,78 @@ export const useChannelsData = () => {
       return;
     }
     setLoading(true);
-    let ids = [];
-    selectedChannels.forEach((channel) => {
-      ids.push(channel.id);
-    });
-    const res = await API.post(`/api/channel/batch`, { ids: ids });
-    const { success, message, data } = res.data;
-    if (success) {
-      showSuccess(t('已删除 ${data} 个通道！').replace('${data}', data));
-      await refresh();
-      setTimeout(() => {
-        if (channels.length === 0 && activePage > 1) {
-          refresh(activePage - 1);
-        }
-      }, 100);
-    } else {
-      showError(message);
+    try {
+      let ids = [];
+      selectedChannels.forEach((channel) => {
+        ids.push(channel.id);
+      });
+      const res = await API.post(`/api/channel/batch`, { ids: ids });
+      const { success, message, data } = res.data;
+      if (success) {
+        showSuccess(t('已删除 ${data} 个通道！').replace('${data}', data));
+        await refresh();
+        setTimeout(() => {
+          if (channels.length === 0 && activePage > 1) {
+            refresh(activePage - 1);
+          }
+        }, 100);
+      } else {
+        showError(message);
+      }
+    } catch (error) {
+      console.error('Failed to batch delete channels:', error);
+      showError(error.message || 'Failed to batch delete channels');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   // Channel operations
   const testAllChannels = async () => {
-    const res = await API.get(`/api/channel/test`);
-    const { success, message } = res.data;
-    if (success) {
-      showInfo(t('已成功开始测试所有已启用通道，请刷新页面查看结果。'));
-    } else {
-      showError(message);
+    try {
+      const res = await API.get(`/api/channel/test`);
+      const { success, message } = res.data;
+      if (success) {
+        showInfo(t('已成功开始测试所有已启用通道，请刷新页面查看结果。'));
+      } else {
+        showError(message);
+      }
+    } catch (error) {
+      console.error('Failed to test all channels:', error);
+      showError(error.message || 'Failed to test all channels');
     }
   };
 
   const deleteAllDisabledChannels = async () => {
-    const res = await API.delete(`/api/channel/disabled`);
-    const { success, message, data } = res.data;
-    if (success) {
-      showSuccess(
-        t('已删除所有禁用渠道，共计 ${data} 个').replace('${data}', data),
-      );
-      await refresh();
-    } else {
-      showError(message);
+    try {
+      const res = await API.delete(`/api/channel/disabled`);
+      const { success, message, data } = res.data;
+      if (success) {
+        showSuccess(
+          t('已删除所有禁用渠道，共计 ${data} 个').replace('${data}', data),
+        );
+        await refresh();
+      } else {
+        showError(message);
+      }
+    } catch (error) {
+      console.error('Failed to delete all disabled channels:', error);
+      showError(error.message || 'Failed to delete all disabled channels');
     }
   };
 
   const updateAllChannelsBalance = async () => {
-    const res = await API.get(`/api/channel/update_balance`);
-    const { success, message } = res.data;
-    if (success) {
-      showInfo(t('已更新完毕所有已启用通道余额！'));
-    } else {
-      showError(message);
+    try {
+      const res = await API.get(`/api/channel/update_balance`);
+      const { success, message } = res.data;
+      if (success) {
+        showInfo(t('已更新完毕所有已启用通道余额！'));
+      } else {
+        showError(message);
+      }
+    } catch (error) {
+      console.error('Failed to update all channels balance:', error);
+      showError(error.message || 'Failed to update all channels balance');
     }
   };
 
@@ -767,33 +823,43 @@ export const useChannelsData = () => {
       return;
     }
 
-    const res = await API.get(`/api/channel/update_balance/${record.id}/`);
-    const { success, message, balance } = res.data;
-    if (success) {
-      updateChannelProperty(record.id, (channel) => {
-        channel.balance = balance;
-        channel.balance_updated_time = Date.now() / 1000;
-      });
-      showInfo(
-        t('通道 ${name} 余额更新成功！').replace('${name}', record.name),
-      );
-    } else {
-      showError(message);
+    try {
+      const res = await API.get(`/api/channel/update_balance/${record.id}/`);
+      const { success, message, balance } = res.data;
+      if (success) {
+        updateChannelProperty(record.id, (channel) => {
+          channel.balance = balance;
+          channel.balance_updated_time = Date.now() / 1000;
+        });
+        showInfo(
+          t('通道 ${name} 余额更新成功！').replace('${name}', record.name),
+        );
+      } else {
+        showError(message);
+      }
+    } catch (error) {
+      console.error('Failed to update channel balance:', error);
+      showError(error.message || 'Failed to update channel balance');
     }
   };
 
   const fixChannelsAbilities = async () => {
-    const res = await API.post(`/api/channel/fix`);
-    const { success, message, data } = res.data;
-    if (success) {
-      showSuccess(
-        t('已修复 ${success} 个通道，失败 ${fails} 个通道。')
-          .replace('${success}', data.success)
-          .replace('${fails}', data.fails),
-      );
-      await refresh();
-    } else {
-      showError(message);
+    try {
+      const res = await API.post(`/api/channel/fix`);
+      const { success, message, data } = res.data;
+      if (success) {
+        showSuccess(
+          t('已修复 ${success} 个通道，失败 ${fails} 个通道。')
+            .replace('${success}', data.success)
+            .replace('${fails}', data.fails),
+        );
+        await refresh();
+      } else {
+        showError(message);
+      }
+    } catch (error) {
+      console.error('Failed to fix channels abilities:', error);
+      showError(error.message || 'Failed to fix channels abilities');
     }
   };
 
@@ -890,7 +956,7 @@ export const useChannelsData = () => {
         return Promise.resolve();
       }
 
-      const { success, message, time, error_code } = res.data;
+      const { success, message, time } = res.data;
 
       // 更新测试结果
       setModelTestResults((prev) => ({
@@ -900,7 +966,6 @@ export const useChannelsData = () => {
           message,
           time: time || 0,
           timestamp: Date.now(),
-          errorCode: error_code || null,
         },
       }));
 
@@ -928,7 +993,7 @@ export const useChannelsData = () => {
           );
         }
       } else {
-        showError(message);
+        showError(`${t('模型')} ${model}: ${message}`);
       }
     } catch (error) {
       // 处理网络错误
@@ -940,10 +1005,9 @@ export const useChannelsData = () => {
           message: error.message || t('网络错误'),
           time: 0,
           timestamp: Date.now(),
-          errorCode: null,
         },
       }));
-      showError(error.message || t('测试失败'));
+      showError(`${t('模型')} ${model}: ${error.message || t('测试失败')}`);
     } finally {
       // 从正在测试的模型集合中移除
       setTestingModels((prev) => {

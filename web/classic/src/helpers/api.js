@@ -246,12 +246,17 @@ export async function getOAuthState() {
   if (affCode && affCode.length > 0) {
     path += `?aff=${affCode}`;
   }
-  const res = await API.get(path);
-  const { success, message, data } = res.data;
-  if (success) {
-    return data;
-  } else {
-    showError(message);
+  try {
+    const res = await API.get(path);
+    const { success, message, data } = res.data;
+    if (success) {
+      return data;
+    } else {
+      showError(message);
+      return '';
+    }
+  } catch (err) {
+    console.error('Failed to get OAuth state:', err);
     return '';
   }
 }
@@ -369,13 +374,17 @@ export async function onCustomOAuthClicked(provider, options = {}) {
 
 let channelModels = undefined;
 export async function loadChannelModels() {
-  const res = await API.get('/api/models');
-  const { success, data } = res.data;
-  if (!success) {
-    return;
+  try {
+    const res = await API.get('/api/models');
+    const { success, data } = res.data;
+    if (!success) {
+      return;
+    }
+    channelModels = data;
+    localStorage.setItem('channel_models', JSON.stringify(data));
+  } catch (err) {
+    console.error('Failed to load channel models:', err);
   }
-  channelModels = data;
-  localStorage.setItem('channel_models', JSON.stringify(data));
 }
 
 export function getChannelModels(type) {

@@ -41,6 +41,7 @@ const UptimePanel = ({
   setActiveUptimeTab,
   loadUptimeData,
   uptimeLegendData,
+  announcementLegendData,
   renderMonitorList,
   CARD_PROPS,
   ILLUSTRATION_SIZE,
@@ -49,11 +50,11 @@ const UptimePanel = ({
   return (
     <Card
       {...CARD_PROPS}
-      className='shadow-sm !rounded-2xl lg:col-span-1'
+      className='db-glass-card lg:col-span-2'
       title={
-        <div className='flex items-center justify-between w-full gap-2'>
-          <div className='flex items-center gap-2'>
-            <Gauge size={16} />
+        <div className='db-card-title-row-between'>
+          <div className='db-card-title-row'>
+            <Gauge size={16} style={{ color: 'var(--hp-accent)' }} />
             {t('服务可用性')}
           </div>
           <Button
@@ -63,14 +64,21 @@ const UptimePanel = ({
             size='small'
             theme='borderless'
             type='tertiary'
-            className='text-gray-500 hover:text-blue-500 hover:bg-blue-50 !rounded-full'
+            style={{
+              color: 'var(--hp-sub)',
+              borderRadius: '50%',
+              width: '28px',
+              height: '28px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
           />
         </div>
       }
       bodyStyle={{ padding: 0 }}
     >
-      {/* 内容区域 */}
-      <div className='relative'>
+      <div style={{ position: 'relative' }}>
         <Spin spinning={uptimeLoading}>
           {uptimeData.length > 0 ? (
             uptimeData.length === 1 ? (
@@ -84,21 +92,29 @@ const UptimePanel = ({
                 activeKey={activeUptimeTab}
                 onChange={setActiveUptimeTab}
                 size='small'
+                style={{ borderRadius: '0 0 12px 12px' }}
+                tabBarStyle={{
+                  padding: '0 12px',
+                  borderBottom: '1px solid var(--hp-border, rgba(0,0,0,0.06))',
+                  marginBottom: 0,
+                }}
               >
                 {uptimeData.map((group, groupIdx) => (
                   <TabPane
                     tab={
-                      <span className='flex items-center gap-2'>
-                        <Gauge size={14} />
+                      <span className='db-uptime-tab'>
+                        <Gauge size={13} style={{ color: 'var(--hp-sub)' }} />
                         {group.categoryName}
                         <Tag
-                          color={
-                            activeUptimeTab === group.categoryName
-                              ? 'red'
-                              : 'grey'
-                          }
+                          color={activeUptimeTab === group.categoryName ? 'blue' : 'grey'}
                           size='small'
                           shape='circle'
+                          style={{
+                            fontSize: '0.7rem',
+                            minWidth: '18px',
+                            height: '18px',
+                            lineHeight: '18px',
+                          }}
                         >
                           {group.monitors ? group.monitors.length : 0}
                         </Tag>
@@ -115,14 +131,12 @@ const UptimePanel = ({
               </Tabs>
             )
           ) : (
-            <div className='flex justify-center items-center py-8'>
+            <div className='flex justify-center items-center' style={{ padding: '2rem 1rem' }}>
               <Empty
                 image={<IllustrationConstruction style={ILLUSTRATION_SIZE} />}
-                darkModeImage={
-                  <IllustrationConstructionDark style={ILLUSTRATION_SIZE} />
-                }
-                title={t('暂无监控数据')}
-                description={t('请联系管理员在系统设置中配置Uptime')}
+                darkModeImage={<IllustrationConstructionDark style={ILLUSTRATION_SIZE} />}
+                title={<span style={{ color: 'var(--hp-text)', fontWeight: 500 }}>{t('暂无监控数据')}</span>}
+                description={<span style={{ color: 'var(--hp-muted)', fontSize: '0.8rem' }}>{t('请联系管理员在系统设置中配置Uptime')}</span>}
               />
             </div>
           )}
@@ -130,18 +144,47 @@ const UptimePanel = ({
       </div>
 
       {/* 图例 */}
-      {uptimeData.length > 0 && (
-        <div className='p-3 bg-gray-50 rounded-b-2xl'>
-          <div className='flex flex-wrap gap-3 text-xs justify-center'>
-            {uptimeLegendData.map((legend, index) => (
-              <div key={index} className='flex items-center gap-1'>
+      {(uptimeData.length > 0 || (announcementLegendData && announcementLegendData.length > 0)) && (
+        <div className='db-legend-bar'>
+          <div className='db-legend-items'>
+            {uptimeData.length > 0 && uptimeLegendData.map((legend, index) => (
+              <div key={`uptime-${index}`} className='db-legend-item'>
                 <div
-                  className='w-2 h-2 rounded-full'
-                  style={{ backgroundColor: legend.color }}
+                  className='db-legend-dot'
+                  style={{
+                    backgroundColor: legend.color,
+                    boxShadow: `0 0 0 2px ${legend.color}33`,
+                  }}
                 />
-                <span className='text-gray-600'>{legend.label}</span>
+                <span className='db-legend-label'>{legend.label}</span>
               </div>
             ))}
+
+            {uptimeData.length > 0 && announcementLegendData && announcementLegendData.length > 0 && (
+              <div style={{ width: '1px', height: '14px', backgroundColor: 'var(--hp-border, rgba(0,0,0,0.1))', flexShrink: 0 }} />
+            )}
+
+            {announcementLegendData && announcementLegendData.map((legend, index) => {
+              const colorMap = {
+                grey: 'var(--hp-muted)',
+                blue: 'var(--hp-accent)',
+                green: '#10b981',
+                orange: 'var(--hp-accent-dark)',
+                red: '#ef4444',
+              };
+              return (
+                <div key={`ann-${index}`} className='db-legend-item'>
+                  <div
+                    className='db-legend-dot'
+                    style={{
+                      backgroundColor: colorMap[legend.color] || 'var(--hp-muted)',
+                      boxShadow: `0 0 0 2px ${colorMap[legend.color] || 'var(--hp-muted)'}33`,
+                    }}
+                  />
+                  <span className='db-legend-label'>{legend.label}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

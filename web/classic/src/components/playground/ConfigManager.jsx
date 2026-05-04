@@ -41,7 +41,6 @@ const ConfigManager = ({
 
   const handleExport = () => {
     try {
-      // 在导出前先保存当前配置，确保导出的是最新内容
       const configWithTimestamp = {
         ...currentConfig,
         timestamp: new Date().toISOString(),
@@ -94,7 +93,6 @@ const ConfigManager = ({
         duration: 3,
       });
     } finally {
-      // 重置文件输入，允许重复选择同一文件
       event.target.value = '';
     }
   };
@@ -111,7 +109,6 @@ const ConfigManager = ({
         type: 'danger',
       },
       onOk: () => {
-        // 询问是否同时重置消息
         Modal.confirm({
           title: t('重置选项'),
           content: t(
@@ -186,7 +183,7 @@ const ConfigManager = ({
       name: 'reset',
       onClick: handleReset,
       children: (
-        <div className='flex items-center gap-2 text-red-600'>
+        <div className='flex items-center gap-2' style={{ color: 'var(--semi-color-danger)' }}>
           <RotateCcw size={14} />
           {t('重置配置')}
         </div>
@@ -195,7 +192,6 @@ const ConfigManager = ({
   ];
 
   if (styleState.isMobile) {
-    // 移动端显示简化的下拉菜单
     return (
       <>
         <Dropdown
@@ -209,7 +205,7 @@ const ConfigManager = ({
             theme='borderless'
             type='tertiary'
             size='small'
-            className='!rounded-lg !text-gray-600 hover:!text-blue-600 hover:!bg-blue-50'
+            style={{ borderRadius: '12px', color: 'var(--hp-sub)', transition: 'all 0.2s ease' }}
           />
         </Dropdown>
 
@@ -224,12 +220,10 @@ const ConfigManager = ({
     );
   }
 
-  // 桌面端显示紧凑的按钮组
   return (
     <div className='space-y-3'>
-      {/* 配置状态信息和重置按钮 */}
       <div className='flex items-center justify-between'>
-        <Typography.Text className='text-xs text-gray-500'>
+        <Typography.Text style={{ fontSize: '12px', color: 'var(--hp-sub)' }}>
           {getConfigStatus()}
         </Typography.Text>
         <Button
@@ -238,11 +232,10 @@ const ConfigManager = ({
           theme='borderless'
           type='danger'
           onClick={handleReset}
-          className='!rounded-full !text-xs !px-2'
+          style={{ borderRadius: '20px', fontSize: '12px', padding: '0 8px', transition: 'all 0.2s ease' }}
         />
       </div>
 
-      {/* 导出和导入按钮 */}
       <div className='flex gap-2'>
         <Button
           icon={<Download size={12} />}
@@ -250,7 +243,7 @@ const ConfigManager = ({
           theme='solid'
           type='primary'
           onClick={handleExport}
-          className='!rounded-lg flex-1 !text-xs !h-7'
+          style={{ borderRadius: '12px', flex: 1, fontSize: '12px', height: '28px', transition: 'all 0.2s ease' }}
         >
           {t('导出')}
         </Button>
@@ -261,7 +254,7 @@ const ConfigManager = ({
           theme='outline'
           type='primary'
           onClick={handleImportClick}
-          className='!rounded-lg flex-1 !text-xs !h-7'
+          style={{ borderRadius: '12px', flex: 1, fontSize: '12px', height: '28px', transition: 'all 0.2s ease' }}
         >
           {t('导入')}
         </Button>

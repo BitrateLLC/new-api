@@ -35,7 +35,11 @@ const SearchModal = ({
   const formRef = useRef();
 
   const FORM_FIELD_PROPS = {
-    className: 'w-full mb-2 !rounded-lg',
+    style: {
+      width: '100%',
+      marginBottom: '0px',
+      borderRadius: '8px',
+    },
   };
 
   const createFormField = (Component, props) => (
@@ -46,54 +50,119 @@ const SearchModal = ({
 
   return (
     <Modal
-      title={t('搜索条件')}
+      title={
+        <span
+          style={{
+            fontWeight: 600,
+            fontSize: '1rem',
+            color: 'var(--hp-text)',
+          }}
+        >
+          {t('搜索条件')}
+        </span>
+      }
       visible={searchModalVisible}
       onOk={handleSearchConfirm}
       onCancel={handleCloseModal}
       closeOnEsc={true}
       size={isMobile ? 'full-width' : 'small'}
       centered
+      style={{ borderRadius: '16px', overflow: 'hidden' }}
+      bodyStyle={{ padding: '20px 24px 8px' }}
     >
-      <Form ref={formRef} layout='vertical' className='w-full'>
+      <Form
+        ref={formRef}
+        layout='vertical'
+        style={{
+          width: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px',
+        }}
+      >
+        {/* 起始时间 */}
         {createFormField(Form.DatePicker, {
           field: 'start_timestamp',
-          label: t('起始时间'),
+          label: (
+            <span
+              style={{
+                color: 'var(--hp-sub)',
+                fontSize: '0.85rem',
+                fontWeight: 500,
+              }}
+            >
+              {t('起始时间')}
+            </span>
+          ),
           initValue: start_timestamp,
           value: start_timestamp,
           type: 'dateTime',
           name: 'start_timestamp',
-          onChange: (value) => handleInputChange(value, 'start_timestamp'),
+          onChange: value => handleInputChange(value, 'start_timestamp'),
         })}
 
+        {/* 结束时间 */}
         {createFormField(Form.DatePicker, {
           field: 'end_timestamp',
-          label: t('结束时间'),
+          label: (
+            <span
+              style={{
+                color: 'var(--hp-sub)',
+                fontSize: '0.85rem',
+                fontWeight: 500,
+              }}
+            >
+              {t('结束时间')}
+            </span>
+          ),
           initValue: end_timestamp,
           value: end_timestamp,
           type: 'dateTime',
           name: 'end_timestamp',
-          onChange: (value) => handleInputChange(value, 'end_timestamp'),
+          onChange: value => handleInputChange(value, 'end_timestamp'),
         })}
 
+        {/* 时间粒度 */}
         {createFormField(Form.Select, {
           field: 'data_export_default_time',
-          label: t('时间粒度'),
+          label: (
+            <span
+              style={{
+                color: 'var(--hp-sub)',
+                fontSize: '0.85rem',
+                fontWeight: 500,
+              }}
+            >
+              {t('时间粒度')}
+            </span>
+          ),
           initValue: dataExportDefaultTime,
           placeholder: t('时间粒度'),
           name: 'data_export_default_time',
           optionList: timeOptions,
-          onChange: (value) =>
+          onChange: value =>
             handleInputChange(value, 'data_export_default_time'),
         })}
 
+        {/* 用户名（仅管理员） */}
         {isAdminUser &&
           createFormField(Form.Input, {
             field: 'username',
-            label: t('用户名称'),
+            label: (
+              <span
+                style={{
+                  color: 'var(--hp-sub)',
+                  fontSize: '0.85rem',
+                  fontWeight: 500,
+                }}
+              >
+                {t('用户名称')}
+              </span>
+            ),
             value: username,
             placeholder: t('可选值'),
             name: 'username',
-            onChange: (value) => handleInputChange(value, 'username'),
+            onChange: value => handleInputChange(value, 'username'),
           })}
       </Form>
     </Modal>

@@ -353,7 +353,12 @@ const NotificationSettings = ({
 
   return (
     <Card
-      className='!rounded-2xl shadow-sm border-0'
+      className='!rounded-2xl'
+      style={{
+        background: 'var(--hp-card)',
+        border: '1px solid var(--hp-border)',
+        boxShadow: 'var(--hp-shadow)',
+      }}
       footer={
         <div className='flex justify-end gap-3'>
           {activeTabKey === 'sidebar' ? (
@@ -362,7 +367,7 @@ const NotificationSettings = ({
               <Button
                 type='tertiary'
                 onClick={resetSidebarModules}
-                className='!rounded-lg'
+                style={{ borderRadius: '8px', transition: 'all 0.2s ease' }}
               >
                 {t('重置为默认')}
               </Button>
@@ -370,14 +375,14 @@ const NotificationSettings = ({
                 type='primary'
                 onClick={saveSidebarSettings}
                 loading={sidebarLoading}
-                className='!rounded-lg'
+                style={{ borderRadius: '8px', transition: 'all 0.2s ease' }}
               >
                 {t('保存设置')}
               </Button>
             </>
           ) : (
             // 其他标签页的通用保存按钮
-            <Button type='primary' onClick={handleSubmit}>
+            <Button type='primary' onClick={handleSubmit} style={{ borderRadius: '8px', transition: 'all 0.2s ease' }}>
               {t('保存设置')}
             </Button>
           )}
@@ -393,7 +398,7 @@ const NotificationSettings = ({
           <Typography.Text className='text-lg font-medium'>
             {t('其他设置')}
           </Typography.Text>
-          <div className='text-xs text-gray-600'>
+          <div className='text-xs' style={{ color: 'var(--hp-sub)' }}>
             {t('通知、价格和隐私相关设置')}
           </div>
         </div>
@@ -559,7 +564,7 @@ const NotificationSettings = ({
                             language='json'
                           />
                         </div>
-                        <div className='text-xs text-gray-500 leading-relaxed'>
+                        <div className='text-xs leading-relaxed' style={{ color: 'var(--hp-muted)' }}>
                           <div>
                             <strong>type:</strong>{' '}
                             {t('通知类型 (quota_exceed: 额度预警)')}{' '}
@@ -611,30 +616,30 @@ const NotificationSettings = ({
                       ]}
                     />
 
-                    <div className='mt-3 p-4 bg-gray-50/50 rounded-xl'>
-                      <div className='text-sm text-gray-700 mb-3'>
+                    <div className='mt-3 p-4 rounded-xl' style={{background:'var(--hp-bg-soft)'}}>
+                      <div className='text-sm mb-3' style={{color:'var(--hp-text)'}}>
                         <strong>{t('模板示例')}</strong>
                       </div>
-                      <div className='text-xs text-gray-600 font-mono bg-white p-3 rounded-lg shadow-sm mb-4'>
+                      <div className='text-xs font-mono p-3 rounded-lg shadow-sm mb-4' style={{color:'var(--hp-sub)',background:'var(--hp-card)'}}>
                         https://api.day.app/yourkey/{'{{title}}'}/
                         {'{{content}}'}?sound=alarm&group=quota
                       </div>
-                      <div className='text-xs text-gray-500 space-y-2'>
+                      <div className='text-xs space-y-2' style={{color:'var(--hp-sub)'}}>
                         <div>
                           • <strong>{'title'}:</strong> {t('通知标题')}
                         </div>
                         <div>
                           • <strong>{'content'}:</strong> {t('通知内容')}
                         </div>
-                        <div className='mt-3 pt-3 border-t border-gray-200'>
-                          <span className='text-gray-400'>
+                        <div className='mt-3 pt-3 border-t' style={{borderColor:'var(--hp-border)'}}>
+                          <span style={{color:'var(--hp-muted)'}}>
                             {t('更多参数请参考')}
                           </span>{' '}
                           <a
                             href='https://github.com/Finb/Bark'
                             target='_blank'
                             rel='noopener noreferrer'
-                            className='text-blue-500 hover:text-blue-600 font-medium'
+                            className='font-medium' style={{color:'var(--hp-accent)'}}
                           >
                             Bark {t('官方文档')}
                           </a>
@@ -712,11 +717,11 @@ const NotificationSettings = ({
                       style={{ width: '100%', maxWidth: '300px' }}
                     />
 
-                    <div className='mt-3 p-4 bg-gray-50/50 rounded-xl'>
-                      <div className='text-sm text-gray-700 mb-3'>
+                    <div className='mt-3 p-4 rounded-xl' style={{background:'var(--hp-bg-soft)'}}>
+                      <div className='text-sm mb-3' style={{color:'var(--hp-text)'}}>
                         <strong>{t('配置说明')}</strong>
                       </div>
-                      <div className='text-xs text-gray-500 space-y-2'>
+                      <div className='text-xs space-y-2' style={{color:'var(--hp-sub)'}}>
                         <div>
                           1. {t('在Gotify服务器的应用管理中创建新应用')}
                         </div>
@@ -727,15 +732,15 @@ const NotificationSettings = ({
                           )}
                         </div>
                         <div>3. {t('填写Gotify服务器的完整URL地址')}</div>
-                        <div className='mt-3 pt-3 border-t border-gray-200'>
-                          <span className='text-gray-400'>
+                        <div className='mt-3 pt-3 border-t' style={{borderColor:'var(--hp-border)'}}>
+                          <span style={{color:'var(--hp-muted)'}}>
                             {t('更多信息请参考')}
                           </span>{' '}
                           <a
                             href='https://gotify.net/'
                             target='_blank'
                             rel='noopener noreferrer'
-                            className='text-blue-500 hover:text-blue-600 font-medium'
+                            className='font-medium' style={{color:'var(--hp-accent)'}}
                           >
                             Gotify {t('官方文档')}
                           </a>
@@ -809,7 +814,7 @@ const NotificationSettings = ({
                 itemKey='sidebar'
               >
                 <div className='py-4'>
-                  <div className='mb-4'>
+                  <div className='mb-4' style={{ color: 'var(--hp-sub)' }}>
                     <Typography.Text
                       type='secondary'
                       size='small'
@@ -824,25 +829,23 @@ const NotificationSettings = ({
                   </div>
                   {/* 边栏设置功能区域容器 */}
                   <div
-                    className='border rounded-xl p-4'
+                    className='rounded-2xl p-4'
                     style={{
-                      borderColor: 'var(--semi-color-border)',
-                      backgroundColor: 'var(--semi-color-bg-1)',
+                      border: '1px solid var(--hp-border)',
+                      background: 'var(--hp-card)',
                     }}
                   >
                     {sectionConfigs.map((section) => (
                       <div key={section.key} className='mb-6'>
                         {/* 区域标题和总开关 */}
                         <div
-                          className='flex justify-between items-center mb-4 p-4 rounded-lg'
+                          className='flex justify-between items-center mb-4 p-4 rounded-xl'
                           style={{
-                            backgroundColor: 'var(--semi-color-fill-0)',
-                            border: '1px solid var(--semi-color-border-light)',
-                            borderColor: 'var(--semi-color-fill-1)',
+                            background: 'var(--hp-fill, var(--semi-color-fill-0))', border: '1px solid var(--hp-border)',
                           }}
                         >
                           <div>
-                            <div className='font-semibold text-base text-gray-900 mb-1'>
+                            <div className='font-semibold text-base mb-1' style={{color:'var(--hp-text)'}}>
                               {section.title}
                             </div>
                             <Typography.Text
@@ -882,7 +885,7 @@ const NotificationSettings = ({
                                 xl={8}
                               >
                                 <Card
-                                  className={`!rounded-xl border border-gray-200 hover:border-blue-300 transition-all duration-200 ${
+                                  className={`!rounded-xl border transition-all duration-200 ${
                                     sidebarModulesUser[section.key]?.enabled !==
                                     false
                                       ? ''
@@ -893,7 +896,7 @@ const NotificationSettings = ({
                                 >
                                   <div className='flex justify-between items-center h-full'>
                                     <div className='flex-1 text-left'>
-                                      <div className='font-semibold text-sm text-gray-900 mb-1'>
+                                      <div className='font-semibold text-sm mb-1' style={{color:'var(--hp-text)'}}>
                                         {module.title}
                                       </div>
                                       <Typography.Text

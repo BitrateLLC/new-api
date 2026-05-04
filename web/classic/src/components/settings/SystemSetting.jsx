@@ -91,7 +91,6 @@ const SystemSetting = () => {
     EmailDomainRestrictionEnabled: '',
     EmailAliasRestrictionEnabled: '',
     SMTPSSLEnabled: '',
-    SMTPForceAuthLogin: '',
     EmailDomainWhitelist: [],
     TelegramOAuthEnabled: '',
     TelegramBotToken: '',
@@ -129,6 +128,7 @@ const SystemSetting = () => {
 
   const getOptions = async () => {
     setLoading(true);
+    try {
     const res = await API.get('/api/option/');
     const { success, message, data } = res.data;
     if (success) {
@@ -183,7 +183,6 @@ const SystemSetting = () => {
           case 'EmailDomainRestrictionEnabled':
           case 'EmailAliasRestrictionEnabled':
           case 'SMTPSSLEnabled':
-          case 'SMTPForceAuthLogin':
           case 'LinuxDOOAuthEnabled':
           case 'discord.enabled':
           case 'oidc.enabled':
@@ -233,7 +232,11 @@ const SystemSetting = () => {
     } else {
       showError(message);
     }
-    setLoading(false);
+    } catch (err) {
+      console.error('Failed to load options:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -1336,15 +1339,6 @@ const SystemSetting = () => {
                         }
                       >
                         {t('启用SMTP SSL')}
-                      </Form.Checkbox>
-                      <Form.Checkbox
-                        field='SMTPForceAuthLogin'
-                        noLabel
-                        onChange={(e) =>
-                          handleCheckboxChange('SMTPForceAuthLogin', e)
-                        }
-                      >
-                        {t('强制使用 AUTH LOGIN')}
                       </Form.Checkbox>
                     </Col>
                   </Row>
