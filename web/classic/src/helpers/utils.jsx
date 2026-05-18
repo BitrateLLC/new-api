@@ -805,6 +805,12 @@ export const getModelPriceItems = (
         value: priceData.completionPrice,
         suffix: unitSuffix,
       },
+      {
+        key: 'cache',
+        label: t('缓存读取价格'),
+        value: priceData.cachePrice,
+        suffix: unitSuffix,
+      },
     ].filter((item) => item.value !== null && item.value !== undefined && item.value !== '');
   }
 

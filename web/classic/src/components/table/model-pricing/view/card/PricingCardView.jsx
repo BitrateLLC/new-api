@@ -245,6 +245,13 @@ const PricingCardView = ({
                       <span className='pricing-price-value'>{priceData.completionPrice}/1{tokenUnit}</span>
                       <span className='pricing-price-label'>{t('输出')}</span>
                     </div>
+                    {priceData?.cachePrice && (
+                      <div className='pricing-card-price-row'>
+                        <span className='pricing-price-arrow pricing-price-fixed'>↓</span>
+                        <span className='pricing-price-value'>{priceData.cachePrice}/1{tokenUnit}</span>
+                        <span className='pricing-price-label'>{t('缓存')}</span>
+                      </div>
+                    )}
                   </div>
                 ) : priceData?.price ? (
                   <div className='pricing-card-price-row'>
