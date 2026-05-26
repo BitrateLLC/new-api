@@ -84,7 +84,6 @@ const DEFAULT_CONFIG = {
   prompt: '',
   size: '',
   quality: '',
-  responseFormat: '',
   background: '',
   outputFormat: '',
   outputCompression: null,
@@ -112,11 +111,6 @@ const QUALITY_OPTIONS = [
   { label: 'low', value: 'low' },
   { label: 'medium', value: 'medium' },
   { label: 'high', value: 'high' },
-];
-
-const RESPONSE_FORMAT_OPTIONS = [
-  { label: 'url', value: 'url' },
-  { label: 'b64_json', value: 'b64_json' },
 ];
 
 const BACKGROUND_OPTIONS = [
@@ -341,6 +335,7 @@ const normalizeStoredMessage = (message) => {
     isThinkingComplete: message.isThinkingComplete,
     hasAutoCollapsed: message.hasAutoCollapsed,
     response: message.response,
+    taskId: message.taskId,
   };
 };
 
@@ -592,14 +587,23 @@ const toImageUrl = (item) => {
   if (item.image_url?.url) return item.image_url.url;
   if (item.url) return item.url;
   if (item.b64_json) return `data:image/png;base64,${item.b64_json}`;
-  if (item.partial_image_b64) {
-    return `data:image/png;base64,${item.partial_image_b64}`;
-  }
   return '';
 };
 
 const isGeneratingStatus = (status) =>
-  status === 'loading' || status === 'incomplete' || status === 'streaming';
+  status === 'loading' ||
+  status === 'incomplete' ||
+  status === 'queued' ||
+  status === 'processing';
+
+const isImageTaskPending = (message) =>
+  Boolean(message?.taskId) && isGeneratingStatus(message.status);
+
+const isImageTaskFinished = (status) =>
+  ['SUCCESS', 'succeeded', 'completed'].includes(String(status || ''));
+
+const isImageTaskFailed = (status) =>
+  ['FAILURE', 'failed', 'error'].includes(String(status || ''));
 
 const isLargeInlineImage = (value) =>
   typeof value === 'string' &&
@@ -651,112 +655,6 @@ const getErrorMessage = async (response) => {
       return response.statusText;
     }
   }
-};
-
-const isEventStreamResponse = (response) =>
-  String(response.headers.get('content-type') || '')
-    .toLowerCase()
-    .includes('text/event-stream');
-
-const streamDataToImageItem = (data) => {
-  const imageUrl = toImageUrl(data);
-  if (!imageUrl) return null;
-  return { url: imageUrl };
-};
-
-const parseSSEEvent = (rawEvent) => {
-  const lines = rawEvent.replace(/\r\n/g, '\n').split('\n');
-  let event = '';
-  const dataLines = [];
-
-  for (const line of lines) {
-    if (line.startsWith('event:')) {
-      event = line.slice('event:'.length).trim();
-    } else if (line.startsWith('data:')) {
-      dataLines.push(line.slice('data:'.length).trimStart());
-    }
-  }
-
-  return {
-    event,
-    data: dataLines.join('\n').trim(),
-  };
-};
-
-const readImageStreamResponse = async (response, onPartialImage, t) => {
-  if (!response.body) {
-    throw new Error(t('浏览器不支持流式读取响应'));
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  const finalItems = [];
-  const partialItems = [];
-  let buffer = '';
-
-  const processRawEvent = (rawEvent) => {
-    const { event, data } = parseSSEEvent(rawEvent);
-    if (!data || data === '[DONE]') return;
-
-    let parsed;
-    try {
-      parsed = JSON.parse(data);
-    } catch (parseError) {
-      return;
-    }
-
-    const eventType = parsed?.type || event;
-    if (eventType === 'error' || event === 'error' || parsed?.error) {
-      throw new Error(
-        parsed?.error?.message || parsed?.message || t('流式生成失败'),
-      );
-    }
-
-    const imageItems = extractImageItems(parsed)
-      .map((item) => streamDataToImageItem(item))
-      .filter(Boolean);
-    if (imageItems.length === 0) return;
-
-    if (String(eventType).includes('partial_image')) {
-      const index =
-        typeof parsed.partial_image_index === 'number'
-          ? parsed.partial_image_index
-          : partialItems.length;
-      partialItems[index] = imageItems[0];
-      onPartialImage(partialItems.filter(Boolean));
-      return;
-    }
-
-    if (String(eventType).includes('completed')) {
-      finalItems.push(...imageItems);
-    }
-  };
-
-  while (true) {
-    const { value, done } = await reader.read();
-    if (value) {
-      buffer += decoder.decode(value, { stream: !done }).replace(/\r\n/g, '\n');
-      let delimiterIndex = buffer.indexOf('\n\n');
-      while (delimiterIndex !== -1) {
-        const rawEvent = buffer.slice(0, delimiterIndex);
-        buffer = buffer.slice(delimiterIndex + 2);
-        processRawEvent(rawEvent);
-        delimiterIndex = buffer.indexOf('\n\n');
-      }
-    }
-
-    if (done) break;
-  }
-
-  buffer += decoder.decode().replace(/\r\n/g, '\n');
-  if (buffer.trim()) {
-    processRawEvent(buffer);
-  }
-
-  return {
-    data: finalItems.length > 0 ? finalItems : partialItems.filter(Boolean),
-    streamed: true,
-  };
 };
 
 const appendFormField = (formData, key, value) => {
@@ -903,12 +801,12 @@ const ImagePlayground = () => {
 
   useEffect(() => {
     const hasInterruptedMessage = messagesRef.current.some((message) =>
-      isGeneratingStatus(message.status),
+      isGeneratingStatus(message.status) && !message.taskId,
     );
     if (!hasInterruptedMessage) return;
 
     const fixedMessages = messagesRef.current.map((message) =>
-      isGeneratingStatus(message.status)
+      isGeneratingStatus(message.status) && !message.taskId
         ? {
             ...message,
             status: 'error',
@@ -1059,13 +957,10 @@ const ImagePlayground = () => {
       model: config.model.trim(),
       prompt: config.prompt,
       n: 1,
-      stream: true,
-      partial_images: 1,
     };
 
     if (config.size) payload.size = config.size;
     if (config.quality) payload.quality = config.quality;
-    if (config.responseFormat) payload.response_format = config.responseFormat;
     if (config.background) payload.background = config.background;
     if (config.outputFormat) payload.output_format = config.outputFormat;
     if (
@@ -1083,7 +978,7 @@ const ImagePlayground = () => {
 
   const imageEditRequestPayload = useMemo(() => ({
     ...requestPayload,
-    response_format: requestPayload.response_format || 'b64_json',
+    response_format: 'b64_json',
     output_format: requestPayload.output_format || 'png',
   }), [requestPayload]);
 
@@ -1091,12 +986,17 @@ const ImagePlayground = () => {
     if (!isImageEditMode) {
       return {
         ...requestPayload,
+        async: true,
+        stream: false,
+        response_format: 'b64_json',
         endpoint: '/v1/images/generations',
       };
     }
 
     return {
       ...imageEditRequestPayload,
+      async: true,
+      stream: false,
       endpoint: '/v1/images/edits',
       image: referenceImages.map((file) => ({
         name: file.name,
@@ -1136,6 +1036,67 @@ const ImagePlayground = () => {
     );
     commitMessages(nextMessages);
   }, [commitMessages]);
+
+  const pollImageTask = useCallback(
+    async (messageId, taskId) => {
+      if (!taskId) return;
+      let stopped = false;
+      while (!stopped) {
+        try {
+          const res = await API.get(`/api/task/image/${taskId}`, {
+            disableDuplicate: true,
+            skipErrorHandler: true,
+          });
+          const payload = res.data || {};
+          if (!payload.success) {
+            throw new Error(payload.message || t('获取任务状态失败'));
+          }
+          const task = payload.data || {};
+          if (isImageTaskFinished(task.status)) {
+            const imagePayload = {
+              data: Array.isArray(task.data) ? task.data : [],
+              task_id: task.task_id,
+              status: task.status,
+            };
+            updateMessage(messageId, {
+              status: 'complete',
+              content: imageItemsToMessageContent(imagePayload, t),
+              response: imagePayload,
+            });
+            stopped = true;
+            Toast.success(t('生成成功'));
+            break;
+          }
+          if (isImageTaskFailed(task.status)) {
+            throw new Error(task.error || t('生成失败'));
+          }
+          updateMessage(messageId, {
+            status: 'processing',
+            content: `${t('生成中')}～`,
+            response: task,
+          });
+        } catch (taskError) {
+          const message = taskError.message || t('获取任务状态失败');
+          updateMessage(messageId, {
+            status: 'error',
+            content: message,
+          });
+          Toast.error(message);
+          stopped = true;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+      }
+    },
+    [t, updateMessage],
+  );
+
+  useEffect(() => {
+    const pendingTasks = messagesRef.current.filter(isImageTaskPending);
+    pendingTasks.forEach((message) => {
+      void pollImageTask(message.id, message.taskId);
+    });
+  }, [pollImageTask]);
 
   const handleReferenceImageChange = useCallback(
     async (event) => {
@@ -1241,7 +1202,14 @@ const ImagePlayground = () => {
     try {
       const authToken = await getSelectedTokenKey();
       const endpoint = isImageEditMode ? '/v1/images/edits' : '/v1/images/generations';
-      const body = isImageEditMode ? new FormData() : requestPayload;
+      const body = isImageEditMode
+        ? new FormData()
+        : {
+            ...requestPayload,
+            async: true,
+            stream: false,
+            response_format: 'b64_json',
+          };
 
       if (isImageEditMode) {
         appendFormField(body, 'model', imageEditRequestPayload.model);
@@ -1254,8 +1222,8 @@ const ImagePlayground = () => {
         appendFormField(body, 'output_format', imageEditRequestPayload.output_format);
         appendFormField(body, 'output_compression', imageEditRequestPayload.output_compression);
         appendFormField(body, 'moderation', imageEditRequestPayload.moderation);
-        appendFormField(body, 'stream', imageEditRequestPayload.stream);
-        appendFormField(body, 'partial_images', imageEditRequestPayload.partial_images);
+        appendFormField(body, 'async', true);
+        appendFormField(body, 'stream', false);
         referenceImages.forEach((file) => {
           body.append('image', file, file.name);
         });
@@ -1274,18 +1242,18 @@ const ImagePlayground = () => {
         throw new Error(await getErrorMessage(res));
       }
 
-      const data = isEventStreamResponse(res)
-        ? await readImageStreamResponse(
-            res,
-            (items) => {
-              updateMessage(assistantMessage.id, {
-                status: 'streaming',
-                content: imageItemsToMessageContent(items, t),
-              });
-            },
-            t,
-          )
-        : await res.json();
+      const data = await res.json();
+      if (data?.task_id) {
+        updateMessage(assistantMessage.id, {
+          status: 'queued',
+          content: `${t('任务已提交')}：${data.task_id}`,
+          response: data,
+          taskId: data.task_id,
+        });
+        Toast.success(t('任务已提交'));
+        void pollImageTask(assistantMessage.id, data.task_id);
+        return;
+      }
       updateMessage(assistantMessage.id, {
         status: 'complete',
         content: imageItemsToMessageContent(data, t),
@@ -1311,6 +1279,7 @@ const ImagePlayground = () => {
     referenceImages,
     requestPayload,
     requestPreviewPayload,
+    pollImageTask,
     t,
     updateMessage,
   ]);
@@ -1675,44 +1644,6 @@ const ImagePlayground = () => {
                 </div>
                 <div>
                   <Text className='mb-2 block text-sm font-medium'>
-                    {t('流式中间图')}
-                  </Text>
-                  <FieldHint>{t('开启流式时建议固定为 1，随请求固定传 1')}</FieldHint>
-                  <InputNumber
-                    min={1}
-                    max={1}
-                    step={1}
-                    value={1}
-                    onFocus={() =>
-                      showFixedParamHint('流式中间图按接口建议固定为 1')
-                    }
-                    onChange={() =>
-                      showFixedParamHint('流式中间图按接口建议固定为 1')
-                    }
-                    style={{ width: '100%' }}
-                  />
-                </div>
-                <div>
-                  <Text className='mb-2 block text-sm font-medium'>
-                    {t('流式返回')}
-                  </Text>
-                  <FieldHint>{t('已固定为流式返回，避免 60s 空闲断开')}</FieldHint>
-                  <InputNumber
-                    min={1}
-                    max={1}
-                    step={1}
-                    value={1}
-                    onFocus={() =>
-                      showFixedParamHint('流式返回已固定开启，不能切换为非流式')
-                    }
-                    onChange={() =>
-                      showFixedParamHint('流式返回已固定开启，不能切换为非流式')
-                    }
-                    style={{ width: '100%' }}
-                  />
-                </div>
-                <div>
-                  <Text className='mb-2 block text-sm font-medium'>
                     {t('尺寸')}
                   </Text>
                   <FieldHint>{t('留空使用默认尺寸')}</FieldHint>
@@ -1735,21 +1666,6 @@ const ImagePlayground = () => {
                     placeholder={t('默认')}
                     optionList={QUALITY_OPTIONS}
                     onChange={(value) => updateConfig('quality', value)}
-                    style={{ width: '100%' }}
-                    getPopupContainer={() => document.body}
-                  />
-                </div>
-                <div>
-                  <Text className='mb-2 block text-sm font-medium'>
-                    {t('响应格式')}
-                  </Text>
-                  <FieldHint>{t('URL 或 Base64，留空默认')}</FieldHint>
-                  <Select
-                    value={config.responseFormat}
-                    placeholder={t('默认')}
-                    showClear
-                    optionList={RESPONSE_FORMAT_OPTIONS}
-                    onChange={(value) => updateConfig('responseFormat', value)}
                     style={{ width: '100%' }}
                     getPopupContainer={() => document.body}
                   />

@@ -359,6 +359,17 @@ func GetByTaskId(userId int, taskId string) (*Task, bool, error) {
 	return task, exist, err
 }
 
+func GetByTaskIdAndTokenId(userId int, tokenId int, taskId string) (*Task, bool, error) {
+	task, exist, err := GetByTaskId(userId, taskId)
+	if err != nil || !exist {
+		return task, exist, err
+	}
+	if tokenId == 0 || task.PrivateData.TokenId != tokenId {
+		return nil, false, nil
+	}
+	return task, true, nil
+}
+
 func GetByTaskIds(userId int, taskIds []any) ([]*Task, error) {
 	if len(taskIds) == 0 {
 		return nil, nil

@@ -189,6 +189,13 @@ func GetAndValidOpenAIImageRequest(c *gin.Context, relayMode int) (*dto.ImageReq
 				}
 				imageRequest.Stream = common.GetPointer(stream)
 			}
+			if asyncValue := strings.TrimSpace(formData.Get("async")); asyncValue != "" {
+				async, err := strconv.ParseBool(asyncValue)
+				if err != nil {
+					return nil, fmt.Errorf("invalid async value: %w", err)
+				}
+				imageRequest.Async = async
+			}
 			if background := formData.Get("background"); background != "" {
 				imageRequest.Background, _ = common.Marshal(background)
 			}

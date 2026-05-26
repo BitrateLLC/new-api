@@ -31,6 +31,7 @@ type ImageRequest struct {
 	OutputCompression json.RawMessage `json:"output_compression,omitempty"`
 	PartialImages     json.RawMessage `json:"partial_images,omitempty"`
 	Stream            *bool           `json:"stream,omitempty"`
+	Async             bool            `json:"async,omitempty"`
 	Images            json.RawMessage `json:"images,omitempty"`
 	Mask              json.RawMessage `json:"mask,omitempty"`
 	InputFidelity     json.RawMessage `json:"input_fidelity,omitempty"`
@@ -190,4 +191,16 @@ type ImageData struct {
 	Url           string `json:"url"`
 	B64Json       string `json:"b64_json"`
 	RevisedPrompt string `json:"revised_prompt"`
+}
+
+type ImageTaskResponse struct {
+	TaskID     string          `json:"task_id"`
+	Status     string          `json:"status"`
+	Progress   string          `json:"progress,omitempty"`
+	CreatedAt  int64           `json:"created_at,omitempty"`
+	UpdatedAt  int64           `json:"updated_at,omitempty"`
+	FinishedAt int64           `json:"finished_at,omitempty"`
+	Error      string          `json:"error,omitempty"`
+	Data       []ImageData     `json:"data,omitempty"`
+	Metadata   json.RawMessage `json:"metadata,omitempty"`
 }
