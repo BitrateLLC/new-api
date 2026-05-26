@@ -45,6 +45,7 @@ const routerMap = {
   detail: '/console',
   pricing: '/pricing',
   task: '/console/task',
+  imageLog: '/console/image-log',
   models: '/console/models',
   deployment: '/console/deployment',
   playground: '/console/playground',
@@ -98,6 +99,11 @@ const SiderBar = ({ onNavigate = () => {} }) => {
           localStorage.getItem('enable_drawing') === 'true'
             ? ''
             : 'tableHiddle',
+      },
+      {
+        text: t('生图日志'),
+        itemKey: 'imageLog',
+        to: '/image-log',
       },
       {
         text: t('任务日志'),

@@ -45,6 +45,7 @@ import ModelPage from './pages/Model';
 import ModelDeploymentPage from './pages/ModelDeployment';
 import Playground from './pages/Playground';
 import ImagePlayground from './pages/ImagePlayground';
+import ImageLog from './pages/ImageLog';
 import Subscription from './pages/Subscription';
 import OAuth2Callback from './components/auth/OAuth2Callback';
 import PersonalSetting from './components/settings/PersonalSetting';
@@ -161,6 +162,14 @@ function App() {
           element={
             <PrivateRoute>
               <ImagePlayground />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path='/console/image-log'
+          element={
+            <PrivateRoute>
+              <ImageLog />
             </PrivateRoute>
           }
         />

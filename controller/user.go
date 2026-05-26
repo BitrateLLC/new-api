@@ -557,9 +557,10 @@ func generateDefaultSidebarConfig(userRole int) string {
 
 	// 聊天区域 - 所有用户都可以访问
 	defaultConfig["chat"] = map[string]interface{}{
-		"enabled":    true,
-		"playground": true,
-		"chat":       true,
+		"enabled":         true,
+		"playground":      true,
+		"imagePlayground": true,
+		"chat":            true,
 	}
 
 	// 控制台区域 - 所有用户都可以访问
@@ -569,6 +570,7 @@ func generateDefaultSidebarConfig(userRole int) string {
 		"token":      true,
 		"log":        true,
 		"midjourney": true,
+		"imageLog":   true,
 		"task":       true,
 	}
 
@@ -644,6 +646,14 @@ func GetUserModels(c *gin.Context) {
 	}
 
 	var models []string
+	queryGroup := c.Query("group")
+	if queryGroup != "" {
+		if _, ok := groups[queryGroup]; !ok && queryGroup != user.Group {
+			common.ApiError(c, fmt.Errorf("无权访问 %s 分组", queryGroup))
+			return
+		}
+		groups = map[string]string{queryGroup: groups[queryGroup]}
+	}
 	for group := range groups {
 		for _, g := range model.GetGroupEnabledModels(group) {
 			if !common.StringsContains(models, g) {

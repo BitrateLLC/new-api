@@ -2,16 +2,20 @@ package relay
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
+	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/model_setting"
@@ -111,11 +115,20 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 		}
 	}
 
+	var captureWriter *imageResponseCaptureWriter
+	if shouldPersistSyncImageResponse(info) {
+		captureWriter = &imageResponseCaptureWriter{ResponseWriter: c.Writer}
+		c.Writer = captureWriter
+	}
+
 	usage, newAPIError := adaptor.DoResponse(c, httpResp, info)
 	if newAPIError != nil {
 		// reset status code 重置状态码
 		service.ResetStatusCode(newAPIError, statusCodeMappingStr)
 		return newAPIError
+	}
+	if captureWriter != nil {
+		persistSyncImageResponse(c, info, request, captureWriter.body.Bytes())
 	}
 
 	imageN := uint(1)
@@ -161,6 +174,92 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 
 	service.PostTextConsumeQuota(c, info, imageUsage, logContent)
 	return nil
+}
+
+type imageResponseCaptureWriter struct {
+	gin.ResponseWriter
+	body bytes.Buffer
+}
+
+func (w *imageResponseCaptureWriter) Write(data []byte) (int, error) {
+	if len(data) > 0 {
+		_, _ = w.body.Write(data)
+	}
+	return w.ResponseWriter.Write(data)
+}
+
+func (w *imageResponseCaptureWriter) WriteString(s string) (int, error) {
+	if s != "" {
+		_, _ = w.body.WriteString(s)
+	}
+	return w.ResponseWriter.WriteString(s)
+}
+
+func shouldPersistSyncImageResponse(info *relaycommon.RelayInfo) bool {
+	return info != nil &&
+		!info.IsStream &&
+		(info.RelayMode == relayconstant.RelayModeImagesGenerations ||
+			info.RelayMode == relayconstant.RelayModeImagesEdits)
+}
+
+func persistSyncImageResponse(c *gin.Context, info *relaycommon.RelayInfo, request *dto.ImageRequest, responseBody []byte) {
+	if len(responseBody) == 0 || info == nil || request == nil {
+		return
+	}
+	taskID := model.GenerateTaskID()
+	now := time.Now().Unix()
+	action := "image_generation"
+	if info.RelayMode == relayconstant.RelayModeImagesEdits {
+		action = "image_edit"
+	}
+	log := &model.ImageGenerationLog{
+		CreatedAt:  now,
+		UpdatedAt:  now,
+		FinishedAt: now,
+		UserId:     info.UserId,
+		TokenId:    info.TokenId,
+		TokenName:  c.GetString("token_name"),
+		TaskID:     taskID,
+		Action:     action,
+		Model:      request.Model,
+		Prompt:     request.Prompt,
+		Status:     model.TaskStatusSuccess,
+	}
+	body := append([]byte(nil), responseBody...)
+	go func() {
+		var imageResp dto.ImageResponse
+		if err := common.Unmarshal(body, &imageResp); err != nil {
+			log.Status = model.TaskStatusFailure
+			log.Error = fmt.Sprintf("parse image response: %s", err.Error())
+			if createErr := model.CreateImageGenerationLog(log); createErr != nil {
+				logger.LogError(context.Background(), fmt.Sprintf("create sync image generation log failed: %s", createErr.Error()))
+			}
+			return
+		}
+		storedResp, err := service.PersistImageResponseToStorage(context.Background(), taskID, &imageResp)
+		if err != nil {
+			log.Status = model.TaskStatusFailure
+			log.Error = err.Error()
+		} else {
+			log.SetImageURLs(imageURLsFromImageResponse(storedResp))
+		}
+		if createErr := model.CreateImageGenerationLog(log); createErr != nil {
+			logger.LogError(context.Background(), fmt.Sprintf("create sync image generation log failed: %s", createErr.Error()))
+		}
+	}()
+}
+
+func imageURLsFromImageResponse(resp *dto.ImageResponse) []string {
+	if resp == nil {
+		return nil
+	}
+	urls := make([]string, 0, len(resp.Data))
+	for _, item := range resp.Data {
+		if strings.TrimSpace(item.Url) != "" {
+			urls = append(urls, item.Url)
+		}
+	}
+	return urls
 }
 
 func normalizeImageUsageForLog(usage *dto.Usage) {
