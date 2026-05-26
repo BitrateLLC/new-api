@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/textproto"
+	"strconv"
 	"strings"
 	"time"
 
@@ -199,6 +200,9 @@ func RelayImageTaskSubmit(c *gin.Context, request *dto.ImageRequest, bodyBytes [
 		respondOpenAIError(c, http.StatusInternalServerError, "create image task failed")
 		return
 	}
+	if err := model.CreateImageGenerationLog(newImageGenerationLog(task, request, relayInfo, c.GetString("token_name"))); err != nil {
+		logger.LogError(c, fmt.Sprintf("create image generation log failed: %s", err.Error()))
+	}
 
 	snapshot := newImageTaskSnapshot(c, relayInfo, request, bodyBytes, headers, task.TaskID)
 	go runImageTask(snapshot)
@@ -324,6 +328,9 @@ func runImageTask(snapshot imageTaskSnapshot) {
 	task.SetData(storedResp)
 	if err := task.Update(); err != nil {
 		logger.LogError(ctx, fmt.Sprintf("update image task success failed: %s", err.Error()))
+	}
+	if err := model.UpdateImageGenerationLog(task.TaskID, task.Status, task.FinishTime, "", imageURLsFromResponse(storedResp)); err != nil {
+		logger.LogError(ctx, fmt.Sprintf("update image generation log success failed: %s", err.Error()))
 	}
 }
 
@@ -526,6 +533,9 @@ func updateImageTaskStatus(task *model.Task, status model.TaskStatus, progress s
 	if err := task.Update(); err != nil {
 		logger.LogError(context.Background(), fmt.Sprintf("update image task status failed: %s", err.Error()))
 	}
+	if err := model.UpdateImageGenerationLog(task.TaskID, status, 0, reason, nil); err != nil {
+		logger.LogError(context.Background(), fmt.Sprintf("update image generation log status failed: %s", err.Error()))
+	}
 }
 
 func failImageTask(task *model.Task, err error) {
@@ -537,6 +547,9 @@ func failImageTask(task *model.Task, err error) {
 	task.UpdatedAt = now
 	if updateErr := task.Update(); updateErr != nil {
 		logger.LogError(context.Background(), fmt.Sprintf("update image task failure failed: %s", updateErr.Error()))
+	}
+	if updateErr := model.UpdateImageGenerationLog(task.TaskID, task.Status, task.FinishTime, task.FailReason, nil); updateErr != nil {
+		logger.LogError(context.Background(), fmt.Sprintf("update image generation log failure failed: %s", updateErr.Error()))
 	}
 }
 
@@ -602,6 +615,151 @@ func imageTaskResponseFromTask(task *model.Task) dto.ImageTaskResponse {
 		resp.Metadata = imageResp.Metadata
 	}
 	return resp
+}
+
+func newImageGenerationLog(task *model.Task, request *dto.ImageRequest, relayInfo *relaycommon.RelayInfo, tokenName string) *model.ImageGenerationLog {
+	now := time.Now().Unix()
+	createdAt := task.CreatedAt
+	if createdAt == 0 {
+		createdAt = now
+	}
+	updatedAt := task.UpdatedAt
+	if updatedAt == 0 {
+		updatedAt = now
+	}
+	log := &model.ImageGenerationLog{
+		CreatedAt: createdAt,
+		UpdatedAt: updatedAt,
+		UserId:    task.UserId,
+		TokenId:   relayInfo.TokenId,
+		TokenName: tokenName,
+		TaskID:    task.TaskID,
+		Action:    task.Action,
+		Model:     request.Model,
+		Prompt:    request.Prompt,
+		Status:    task.Status,
+	}
+	return log
+}
+
+func imageURLsFromResponse(resp *dto.ImageResponse) []string {
+	if resp == nil {
+		return nil
+	}
+	urls := make([]string, 0, len(resp.Data))
+	for _, item := range resp.Data {
+		if strings.TrimSpace(item.Url) == "" {
+			continue
+		}
+		urls = append(urls, item.Url)
+	}
+	return urls
+}
+
+func imageGenerationLogQueryParams(c *gin.Context, allowTokenFilter bool) model.ImageGenerationLogQueryParams {
+	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
+	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
+	tokenID := 0
+	if allowTokenFilter {
+		tokenID, _ = strconv.Atoi(c.Query("token_id"))
+	}
+	return model.ImageGenerationLogQueryParams{
+		TokenID:        tokenID,
+		TaskID:         c.Query("task_id"),
+		Status:         c.Query("status"),
+		Model:          c.Query("model"),
+		StartTimestamp: startTimestamp,
+		EndTimestamp:   endTimestamp,
+	}
+}
+
+func imageGenerationLogsToDto(logs []*model.ImageGenerationLog) []dto.ImageGenerationLogItem {
+	items := make([]dto.ImageGenerationLogItem, 0, len(logs))
+	for _, log := range logs {
+		items = append(items, dto.ImageGenerationLogItem{
+			ID:         log.ID,
+			TaskID:     log.TaskID,
+			UserID:     log.UserId,
+			TokenID:    log.TokenId,
+			TokenName:  log.TokenName,
+			Action:     log.Action,
+			Model:      log.Model,
+			Prompt:     log.Prompt,
+			Status:     string(log.Status),
+			Error:      log.Error,
+			ImageUrls:  log.GetImageURLs(),
+			CreatedAt:  log.CreatedAt,
+			UpdatedAt:  log.UpdatedAt,
+			FinishedAt: log.FinishedAt,
+		})
+	}
+	return items
+}
+
+func imageGenerationLogsToURLDto(logs []*model.ImageGenerationLog) []dto.ImageGenerationURLItem {
+	items := make([]dto.ImageGenerationURLItem, 0)
+	for _, log := range logs {
+		for _, imageURL := range log.GetImageURLs() {
+			items = append(items, dto.ImageGenerationURLItem{
+				TaskID:     log.TaskID,
+				ImageURL:   imageURL,
+				UserID:     log.UserId,
+				TokenID:    log.TokenId,
+				TokenName:  log.TokenName,
+				Action:     log.Action,
+				Model:      log.Model,
+				Status:     string(log.Status),
+				CreatedAt:  log.CreatedAt,
+				FinishedAt: log.FinishedAt,
+			})
+		}
+	}
+	return items
+}
+
+func getImageGenerationLogs(c *gin.Context, userID int, queryParams model.ImageGenerationLogQueryParams, urlsOnly bool) {
+	pageInfo := common.GetPageQuery(c)
+	logs, err := model.GetUserImageGenerationLogs(userID, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), queryParams)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	total, err := model.CountUserImageGenerationLogs(userID, queryParams)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(total))
+	if urlsOnly {
+		pageInfo.SetItems(imageGenerationLogsToURLDto(logs))
+	} else {
+		pageInfo.SetItems(imageGenerationLogsToDto(logs))
+	}
+	common.ApiSuccess(c, pageInfo)
+}
+
+func GetUserImageGenerationLogs(c *gin.Context) {
+	userID := c.GetInt("id")
+	getImageGenerationLogs(c, userID, imageGenerationLogQueryParams(c, true), false)
+}
+
+func GetUserImageGenerationURLs(c *gin.Context) {
+	userID := c.GetInt("id")
+	getImageGenerationLogs(c, userID, imageGenerationLogQueryParams(c, true), true)
+}
+
+func GetTokenImageGenerationLogs(c *gin.Context) {
+	userID := c.GetInt("id")
+	queryParams := imageGenerationLogQueryParams(c, false)
+	queryParams.TokenID = c.GetInt("token_id")
+	getImageGenerationLogs(c, userID, queryParams, false)
+}
+
+func GetTokenImageGenerationURLs(c *gin.Context) {
+	userID := c.GetInt("id")
+	queryParams := imageGenerationLogQueryParams(c, false)
+	queryParams.TokenID = c.GetInt("token_id")
+	getImageGenerationLogs(c, userID, queryParams, true)
 }
 
 func respondOpenAIError(c *gin.Context, status int, message string) {

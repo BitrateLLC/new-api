@@ -56,6 +56,11 @@ const PageLayout = () => {
     !location.pathname.startsWith('/console/chat') &&
     location.pathname !== '/console/playground' &&
     location.pathname !== '/console/image-playground';
+  const shouldHeaderPaddingOnly =
+    location.pathname === '/console/playground' ||
+    location.pathname === '/console/image-playground';
+  const contentPadding = shouldInnerPadding ? (isMobile ? '5px' : '24px') : '0';
+  const contentPaddingTop = shouldHeaderPaddingOnly ? '64px' : contentPadding;
 
   const isConsoleRoute = location.pathname.startsWith('/console');
   const showSider = isConsoleRoute && (!isMobile || drawerOpen);
@@ -65,6 +70,15 @@ const PageLayout = () => {
       setCollapsed(false);
     }
   }, [isMobile, drawerOpen, collapsed, setCollapsed]);
+
+  useEffect(() => {
+    const content = document.getElementById('app-content-scroll');
+    if (content) {
+      content.scrollTop = 0;
+      content.scrollLeft = 0;
+    }
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [location.pathname]);
 
   const loadUser = () => {
     let user = localStorage.getItem('user');
@@ -218,14 +232,15 @@ const PageLayout = () => {
           }}
         >
           <Content
+            id='app-content-scroll'
             style={{
               flex: '1 1 auto',
               overflowY: 'auto',
               WebkitOverflowScrolling: 'touch',
-              paddingTop: `calc(64px + ${shouldInnerPadding ? (isMobile ? '5px' : '24px') : '0px'})`,
-              paddingLeft: shouldInnerPadding ? (isMobile ? '5px' : '24px') : '0',
-              paddingRight: shouldInnerPadding ? (isMobile ? '5px' : '24px') : '0',
-              paddingBottom: shouldInnerPadding ? (isMobile ? '5px' : '24px') : '0',
+              paddingTop: contentPaddingTop,
+              paddingLeft: contentPadding,
+              paddingRight: contentPadding,
+              paddingBottom: contentPadding,
               backgroundColor: 'var(--hp-bg)',
             }}
           >

@@ -22,6 +22,8 @@ import (
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 )
 
+const maxStoredImageBytes = 60 * 1024 * 1024
+
 type ImageStorageConfig struct {
 	Endpoint      string
 	Bucket        string
@@ -68,7 +70,7 @@ func PersistImageResponseToStorage(ctx context.Context, taskID string, imageResp
 	out.Data = make([]dto.ImageData, 0, len(imageResp.Data))
 	for i, item := range imageResp.Data {
 		next := item
-		raw, contentType, ext, ok, err := imageDataBytes(item)
+		raw, contentType, ext, ok, err := imageDataBytes(ctx, item)
 		if err != nil {
 			return nil, err
 		}
@@ -86,7 +88,7 @@ func PersistImageResponseToStorage(ctx context.Context, taskID string, imageResp
 	return &out, nil
 }
 
-func imageDataBytes(item dto.ImageData) ([]byte, string, string, bool, error) {
+func imageDataBytes(ctx context.Context, item dto.ImageData) ([]byte, string, string, bool, error) {
 	value := strings.TrimSpace(item.B64Json)
 	if value != "" {
 		raw, err := decodeBase64Payload(value)
@@ -97,6 +99,13 @@ func imageDataBytes(item dto.ImageData) ([]byte, string, string, bool, error) {
 		return raw, normalizeImageContentType(contentType), extensionFromContentType(contentType), true, nil
 	}
 	value = strings.TrimSpace(item.Url)
+	if strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://") {
+		raw, contentType, err := downloadImageBytes(ctx, value)
+		if err != nil {
+			return nil, "", "", false, err
+		}
+		return raw, contentType, extensionFromContentType(contentType), true, nil
+	}
 	if !strings.HasPrefix(value, "data:image/") {
 		return nil, "", "", false, nil
 	}
@@ -116,6 +125,33 @@ func imageDataBytes(item dto.ImageData) ([]byte, string, string, bool, error) {
 		}
 	}
 	return raw, normalizeImageContentType(contentType), extensionFromContentType(contentType), true, nil
+}
+
+func downloadImageBytes(ctx context.Context, imageURL string) ([]byte, string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, imageURL, nil)
+	if err != nil {
+		return nil, "", fmt.Errorf("create image download request: %w", err)
+	}
+	resp, err := GetHttpClient().Do(req)
+	if err != nil {
+		return nil, "", fmt.Errorf("download image: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, "", fmt.Errorf("download image failed: HTTP %d", resp.StatusCode)
+	}
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxStoredImageBytes+1))
+	if err != nil {
+		return nil, "", fmt.Errorf("read image response: %w", err)
+	}
+	if len(raw) > maxStoredImageBytes {
+		return nil, "", fmt.Errorf("image exceeds %d bytes", maxStoredImageBytes)
+	}
+	contentType := normalizeImageContentType(resp.Header.Get("Content-Type"))
+	if contentType == "image/png" && len(raw) > 0 {
+		contentType = normalizeImageContentType(http.DetectContentType(raw))
+	}
+	return raw, contentType, nil
 }
 
 func decodeBase64Payload(value string) ([]byte, error) {

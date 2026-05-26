@@ -129,6 +129,7 @@ export function getLucideIcon(key, selected = false) {
     case 'log':
       return <BarChart3 {...commonProps} color={iconColor} />;
     case 'midjourney':
+    case 'imageLog':
       return <ImageIcon {...commonProps} color={iconColor} />;
     case 'task':
       return <CheckSquare {...commonProps} color={iconColor} />;

@@ -45,12 +45,12 @@ import {
   Code,
   Image as ImageIcon,
   ImagePlus,
-  Key,
   RotateCcw,
   Send,
   Settings2,
   Trash2,
   Upload,
+  Users,
 } from 'lucide-react';
 import { UserContext } from '../../context/User';
 import { useActualTheme } from '../../context/Theme';
@@ -59,8 +59,8 @@ import {
   API,
   copy,
   encodeToBase64,
-  fetchTokenKey,
   getLogo,
+  processGroupsData,
   stringToColor,
 } from '../../helpers';
 import DebugPanel from '../../components/playground/DebugPanel';
@@ -78,8 +78,8 @@ const IMAGE_ASSET_STORE_NAME = 'image_assets';
 const imageObjectUrls = new Set();
 
 const DEFAULT_CONFIG = {
-  tokenId: '',
-  model: 'gpt-image-1',
+  group: '',
+  model: '',
   playgroundMode: 'text-to-image',
   prompt: '',
   size: '',
@@ -102,8 +102,6 @@ const SIZE_OPTIONS = [
   { label: '2160x3840 (4K)', value: '2160x3840' },
   { label: '1024x1792', value: '1024x1792' },
   { label: '1792x1024', value: '1792x1024' },
-  { label: '512x512', value: '512x512' },
-  { label: '256x256', value: '256x256' },
 ];
 
 const QUALITY_OPTIONS = [
@@ -158,6 +156,7 @@ const loadStoredConfig = () => {
     if (!raw) return DEFAULT_CONFIG;
     const storedConfig = JSON.parse(raw);
     delete storedConfig.apiKey;
+    delete storedConfig.tokenId;
     return { ...DEFAULT_CONFIG, ...storedConfig };
   } catch (error) {
     return DEFAULT_CONFIG;
@@ -547,12 +546,6 @@ const hydrateStoredMessages = async (storedMessages) => {
   return { messages: hydrated, changed };
 };
 
-const normalizeApiKey = (key) => {
-  const trimmedKey = String(key || '').trim();
-  if (!trimmedKey) return '';
-  return trimmedKey.startsWith('sk-') ? trimmedKey : `sk-${trimmedKey}`;
-};
-
 const getModelName = (model) => {
   if (typeof model === 'string') return model.trim();
   return String(model?.id || model?.name || model?.model || '').trim();
@@ -644,23 +637,16 @@ const getMessageCopyText = (message) => {
     .join('\n');
 };
 
-const getErrorMessage = async (response) => {
-  try {
-    const data = await response.json();
-    return data?.error?.message || data?.message || JSON.stringify(data);
-  } catch (error) {
-    try {
-      return await response.text();
-    } catch (textError) {
-      return response.statusText;
-    }
-  }
-};
-
 const appendFormField = (formData, key, value) => {
   if (value === undefined || value === null || value === '') return;
   formData.append(key, String(value));
 };
+
+const getRequestErrorMessage = (error, t) =>
+  error?.response?.data?.error?.message ||
+  error?.response?.data?.message ||
+  error?.message ||
+  t('请求发生错误');
 
 const generateAvatarDataUrl = (username) => {
   if (!username) {
@@ -685,10 +671,10 @@ const ImagePlayground = () => {
   const logo = useMemo(() => getLogo(), [actualTheme]);
   const styleState = useMemo(() => ({ isMobile }), [isMobile]);
   const [config, setConfig] = useState(loadStoredConfig);
+  const [groups, setGroups] = useState([]);
+  const [loadingGroups, setLoadingGroups] = useState(false);
   const [models, setModels] = useState([]);
-  const [tokens, setTokens] = useState([]);
   const [loadingModels, setLoadingModels] = useState(false);
-  const [loadingTokens, setLoadingTokens] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [messages, setMessages] = useState(() =>
     loadStoredMessages().map(normalizeStoredMessage).filter(Boolean),
@@ -700,8 +686,6 @@ const ImagePlayground = () => {
   const [previewTimestamp, setPreviewTimestamp] = useState(null);
   const [referenceImages, setReferenceImages] = useState([]);
   const [referenceImagePreviews, setReferenceImagePreviews] = useState([]);
-  const tokenKeyCacheRef = useRef(new Map());
-  const tokenKeyRequestRef = useRef(new Map());
   const referenceImageInputRef = useRef(null);
   const messagesRef = useRef(messages);
   const persistSequenceRef = useRef(0);
@@ -817,95 +801,69 @@ const ImagePlayground = () => {
     commitMessages(fixedMessages);
   }, [commitMessages, t]);
 
-  const getSelectedTokenKey = useCallback(async () => {
-    const tokenId = config.tokenId ? String(config.tokenId) : '';
-    if (!tokenId) return '';
-
-    const cachedKey = tokenKeyCacheRef.current.get(tokenId);
-    if (cachedKey) return cachedKey;
-
-    const pendingRequest = tokenKeyRequestRef.current.get(tokenId);
-    if (pendingRequest) return pendingRequest;
-
-    const request = fetchTokenKey(tokenId)
-      .then((rawKey) => {
-        const key = normalizeApiKey(rawKey);
-        if (key) tokenKeyCacheRef.current.set(tokenId, key);
-        return key;
-      })
-      .finally(() => {
-        tokenKeyRequestRef.current.delete(tokenId);
-      });
-    tokenKeyRequestRef.current.set(tokenId, request);
-    return request;
-  }, [config.tokenId]);
-
   useEffect(() => {
     let mounted = true;
-    const loadTokens = async () => {
-      setLoadingTokens(true);
+    const loadGroups = async () => {
+      if (!userState?.user) return;
+      setLoadingGroups(true);
       try {
-        const res = await API.get('/api/token/?p=1&size=100');
-        const { success, data } = res.data || {};
-        if (!success) throw new Error('Failed to load tokens');
-
-        const tokenItems = Array.isArray(data) ? data : data?.items || [];
-        const activeTokens = tokenItems.filter((token) => token.status === 1);
-        if (!mounted) return;
-
-        setTokens(activeTokens);
-        setConfig((prev) => {
-          const currentTokenId = prev.tokenId ? String(prev.tokenId) : '';
-          if (
-            currentTokenId &&
-            activeTokens.some((token) => String(token.id) === currentTokenId)
-          ) {
-            return prev;
-          }
-          return {
-            ...prev,
-            tokenId: activeTokens.length === 1 ? String(activeTokens[0].id) : '',
-          };
+        const res = await API.get('/api/user/self/groups', {
+          disableDuplicate: true,
+          skipErrorHandler: true,
         });
-      } catch (tokenError) {
-        if (mounted) Toast.warning(t('加载令牌失败'));
+        const { success, message, data } = res.data || {};
+        if (!mounted) return;
+        if (!success) {
+          Toast.warning(message || t('加载分组失败'));
+          return;
+        }
+
+        const userGroup =
+          userState?.user?.group ||
+          JSON.parse(localStorage.getItem('user') || '{}')?.group;
+        const groupOptions = processGroupsData(data || {}, userGroup);
+        setGroups(groupOptions);
+        setConfig((prev) => {
+          const hasCurrentGroup = groupOptions.some(
+            (option) => option.value === prev.group,
+          );
+          const nextGroup = hasCurrentGroup
+            ? prev.group
+            : groupOptions[0]?.value || '';
+          if (nextGroup === prev.group) return prev;
+          return { ...prev, group: nextGroup, model: '' };
+        });
+      } catch (groupError) {
+        if (mounted) {
+          setGroups([]);
+          Toast.warning(groupError.message || t('加载分组失败'));
+        }
       } finally {
-        if (mounted) setLoadingTokens(false);
+        if (mounted) setLoadingGroups(false);
       }
     };
-    loadTokens();
+    loadGroups();
     return () => {
       mounted = false;
     };
-  }, [t]);
+  }, [t, userState?.user]);
 
   useEffect(() => {
     let mounted = true;
     const loadModels = async () => {
-      const tokenId = config.tokenId ? String(config.tokenId) : '';
-      if (!tokenId) {
+      if (!config.group) {
         setModels([]);
         setConfig((prev) => (prev.model ? { ...prev, model: '' } : prev));
-        setLoadingModels(false);
         return;
       }
-
       setModels([]);
       setConfig((prev) => (prev.model ? { ...prev, model: '' } : prev));
       setLoadingModels(true);
       try {
-        const apiKey = await getSelectedTokenKey();
-        if (!apiKey) {
-          throw new Error(t('请选择令牌'));
-        }
-        if (!mounted) return;
-
-        const res = await API.get('/v1/models', {
+        const res = await API.get('/api/user/models', {
+          params: config.group ? { group: config.group } : undefined,
           disableDuplicate: true,
           skipErrorHandler: true,
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-          },
         });
         const data = res.data?.data || res.data || {};
         const modelList = Array.isArray(data)
@@ -950,10 +908,11 @@ const ImagePlayground = () => {
     return () => {
       mounted = false;
     };
-  }, [config.tokenId, getSelectedTokenKey, t]);
+  }, [config.group, t]);
 
   const requestPayload = useMemo(() => {
     const payload = {
+      group: config.group,
       model: config.model.trim(),
       prompt: config.prompt,
       n: 1,
@@ -989,7 +948,7 @@ const ImagePlayground = () => {
         async: true,
         stream: false,
         response_format: 'b64_json',
-        endpoint: '/v1/images/generations',
+        endpoint: '/pg/images/generations',
       };
     }
 
@@ -997,7 +956,7 @@ const ImagePlayground = () => {
       ...imageEditRequestPayload,
       async: true,
       stream: false,
-      endpoint: '/v1/images/edits',
+      endpoint: '/pg/images/edits',
       image: referenceImages.map((file) => ({
         name: file.name,
         type: file.type,
@@ -1007,7 +966,11 @@ const ImagePlayground = () => {
   }, [imageEditRequestPayload, isImageEditMode, referenceImages, requestPayload]);
 
   const updateConfig = useCallback((field, value) => {
-    setConfig((prev) => ({ ...prev, [field]: value }));
+    setConfig((prev) => ({
+      ...prev,
+      [field]: value,
+      ...(field === 'group' ? { model: '' } : {}),
+    }));
   }, []);
 
   const showFixedParamHint = useCallback(
@@ -1015,19 +978,6 @@ const ImagePlayground = () => {
       Toast.info(t(message));
     },
     [t],
-  );
-
-  const tokenOptions = useMemo(
-    () =>
-      tokens.map((token) => {
-        const name = token.name || `#${token.id}`;
-        const maskedKey = token.key ? ` · ${token.key}` : '';
-        return {
-          label: `${name}${maskedKey}`,
-          value: String(token.id),
-        };
-      }),
-    [tokens],
   );
 
   const updateMessage = useCallback((messageId, patch) => {
@@ -1085,7 +1035,7 @@ const ImagePlayground = () => {
           stopped = true;
           break;
         }
-        await new Promise((resolve) => setTimeout(resolve, 3000));
+        await new Promise((resolve) => setTimeout(resolve, 8000));
       }
     },
     [t, updateMessage],
@@ -1167,8 +1117,8 @@ const ImagePlayground = () => {
   }, []);
 
   const submit = useCallback(async () => {
-    if (!config.tokenId) {
-      Toast.error(t('请先选择令牌'));
+    if (!requestPayload.group) {
+      Toast.error(t('请先选择分组'));
       return;
     }
     if (!requestPayload.model) {
@@ -1200,8 +1150,7 @@ const ImagePlayground = () => {
     setLastRequestTime(new Date().toISOString());
 
     try {
-      const authToken = await getSelectedTokenKey();
-      const endpoint = isImageEditMode ? '/v1/images/edits' : '/v1/images/generations';
+      const endpoint = isImageEditMode ? '/pg/images/edits' : '/pg/images/generations';
       const body = isImageEditMode
         ? new FormData()
         : {
@@ -1212,6 +1161,7 @@ const ImagePlayground = () => {
           };
 
       if (isImageEditMode) {
+        appendFormField(body, 'group', imageEditRequestPayload.group);
         appendFormField(body, 'model', imageEditRequestPayload.model);
         appendFormField(body, 'prompt', imageEditRequestPayload.prompt);
         appendFormField(body, 'n', imageEditRequestPayload.n);
@@ -1229,20 +1179,11 @@ const ImagePlayground = () => {
         });
       }
 
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          ...(isImageEditMode ? {} : { 'Content-Type': 'application/json' }),
-          Authorization: `Bearer ${authToken}`,
-        },
-        body: isImageEditMode ? body : JSON.stringify(body),
+      const res = await API.post(endpoint, body, {
+        skipErrorHandler: true,
+        headers: isImageEditMode ? {} : { 'Content-Type': 'application/json' },
       });
-
-      if (!res.ok) {
-        throw new Error(await getErrorMessage(res));
-      }
-
-      const data = await res.json();
+      const data = res.data || {};
       if (data?.task_id) {
         updateMessage(assistantMessage.id, {
           status: 'queued',
@@ -1261,7 +1202,7 @@ const ImagePlayground = () => {
       });
       Toast.success(t('生成成功'));
     } catch (submitError) {
-      const message = submitError.message || t('请求发生错误');
+      const message = getRequestErrorMessage(submitError, t);
       setError(message);
       updateMessage(assistantMessage.id, {
         status: 'error',
@@ -1272,8 +1213,6 @@ const ImagePlayground = () => {
       setSubmitting(false);
     }
   }, [
-    config.tokenId,
-    getSelectedTokenKey,
     imageEditRequestPayload,
     isImageEditMode,
     referenceImages,
@@ -1287,7 +1226,8 @@ const ImagePlayground = () => {
   const reset = useCallback(() => {
     setConfig((prev) => ({
       ...DEFAULT_CONFIG,
-      tokenId: prev.tokenId,
+      group: prev.group,
+      model: prev.model,
     }));
     setError('');
     clearReferenceImage();
@@ -1467,24 +1407,22 @@ const ImagePlayground = () => {
             <div className='space-y-5 overflow-y-auto flex-1 pr-1'>
               <div>
                 <div className='flex items-center gap-2 mb-2'>
-                  <Key size={14} style={{ color: 'var(--hp-sub)' }} />
+                  <Users size={14} style={{ color: 'var(--hp-sub)' }} />
                   <Text strong className='text-sm'>
-                    {t('令牌')}
+                    {t('分组')}
                   </Text>
                 </div>
-                <FieldHint>{t('选择后加载该令牌可用模型')}</FieldHint>
+                <FieldHint>{t('选择分组后自动加载该分组可用的生图模型')}</FieldHint>
                 <Select
-                  value={config.tokenId}
+                  value={config.group}
                   filter={selectFilter}
-                  loading={loadingTokens}
-                  optionList={tokenOptions}
-                  placeholder={
-                    tokenOptions.length > 0
-                      ? t('请选择令牌')
-                      : t('没有可用令牌')
-                  }
-                  disabled={!loadingTokens && tokenOptions.length === 0}
-                  onChange={(value) => updateConfig('tokenId', value)}
+                  loading={loadingGroups}
+                  autoClearSearchValue={false}
+                  optionList={groups}
+                  placeholder={t('请选择分组')}
+                  emptyContent={t('暂无可用分组')}
+                  disabled={loadingGroups}
+                  onChange={(value) => updateConfig('group', value)}
                   style={{ width: '100%' }}
                   getPopupContainer={() => document.body}
                 />
@@ -1497,23 +1435,16 @@ const ImagePlayground = () => {
                     {t('模型')}
                   </Text>
                 </div>
-                <FieldHint>{t('可选择或手动输入模型')}</FieldHint>
+                <FieldHint>{t('模型会根据当前分组自动选择，也可在该分组模型内切换')}</FieldHint>
                 <Select
                   value={config.model}
                   filter={selectFilter}
                   loading={loadingModels}
-                  allowCreate
                   autoClearSearchValue={false}
                   optionList={models}
-                  placeholder={
-                    config.tokenId
-                      ? t('请选择模型')
-                      : t('请先选择令牌')
-                  }
-                  emptyContent={
-                    config.tokenId ? t('暂无数据') : t('请先选择令牌')
-                  }
-                  disabled={!config.tokenId || loadingModels}
+                  placeholder={t('请选择模型')}
+                  emptyContent={t('暂无可用生图模型')}
+                  disabled={loadingModels || !config.group}
                   onChange={(value) => updateConfig('model', value)}
                   style={{ width: '100%' }}
                   getPopupContainer={() => document.body}

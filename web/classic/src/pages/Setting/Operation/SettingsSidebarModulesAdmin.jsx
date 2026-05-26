@@ -52,6 +52,7 @@ export default function SettingsSidebarModulesAdmin(props) {
       token: true,
       log: true,
       midjourney: true,
+      imageLog: true,
       task: true,
     },
     personal: {
@@ -243,6 +244,11 @@ export default function SettingsSidebarModulesAdmin(props) {
           key: 'midjourney',
           title: t('绘图日志'),
           description: t('绘图任务记录'),
+        },
+        {
+          key: 'imageLog',
+          title: t('生图日志'),
+          description: t('图片生成记录'),
         },
         { key: 'task', title: t('任务日志'), description: t('系统任务记录') },
       ],

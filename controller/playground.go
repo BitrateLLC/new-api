@@ -13,26 +13,36 @@ import (
 )
 
 func Playground(c *gin.Context) {
-	var newAPIError *types.NewAPIError
-
-	defer func() {
-		if newAPIError != nil {
-			c.JSON(newAPIError.StatusCode, gin.H{
-				"error": newAPIError.ToOpenAIError(),
-			})
-		}
-	}()
-
-	useAccessToken := c.GetBool("use_access_token")
-	if useAccessToken {
-		newAPIError = types.NewError(errors.New("暂不支持使用 access token"), types.ErrorCodeAccessDenied, types.ErrOptionWithSkipRetry())
+	if apiErr := setupPlaygroundContext(c, types.RelayFormatOpenAI); apiErr != nil {
+		c.JSON(apiErr.StatusCode, gin.H{
+			"error": apiErr.ToOpenAIError(),
+		})
 		return
 	}
 
-	relayInfo, err := relaycommon.GenRelayInfo(c, types.RelayFormatOpenAI, nil, nil)
-	if err != nil {
-		newAPIError = types.NewError(err, types.ErrorCodeInvalidRequest, types.ErrOptionWithSkipRetry())
+	Relay(c, types.RelayFormatOpenAI)
+}
+
+func PlaygroundImage(c *gin.Context) {
+	if apiErr := setupPlaygroundContext(c, types.RelayFormatOpenAIImage); apiErr != nil {
+		c.JSON(apiErr.StatusCode, gin.H{
+			"error": apiErr.ToOpenAIError(),
+		})
 		return
+	}
+
+	Relay(c, types.RelayFormatOpenAIImage)
+}
+
+func setupPlaygroundContext(c *gin.Context, relayFormat types.RelayFormat) *types.NewAPIError {
+	useAccessToken := c.GetBool("use_access_token")
+	if useAccessToken {
+		return types.NewError(errors.New("暂不支持使用 access token"), types.ErrorCodeAccessDenied, types.ErrOptionWithSkipRetry())
+	}
+
+	relayInfo, err := relaycommon.GenRelayInfo(c, relayFormat, nil, nil)
+	if err != nil {
+		return types.NewError(err, types.ErrorCodeInvalidRequest, types.ErrOptionWithSkipRetry())
 	}
 
 	userId := c.GetInt("id")
@@ -40,8 +50,7 @@ func Playground(c *gin.Context) {
 	// Write user context to ensure acceptUnsetRatio is available
 	userCache, err := model.GetUserCache(userId)
 	if err != nil {
-		newAPIError = types.NewError(err, types.ErrorCodeQueryDataError, types.ErrOptionWithSkipRetry())
-		return
+		return types.NewError(err, types.ErrorCodeQueryDataError, types.ErrOptionWithSkipRetry())
 	}
 	userCache.WriteContext(c)
 
@@ -51,6 +60,5 @@ func Playground(c *gin.Context) {
 		Group:  relayInfo.UsingGroup,
 	}
 	_ = middleware.SetupContextForToken(c, tempToken)
-
-	Relay(c, types.RelayFormatOpenAI)
+	return nil
 }
