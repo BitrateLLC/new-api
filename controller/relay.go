@@ -121,10 +121,33 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		return
 	}
 
-	relayInfo, err := relaycommon.GenRelayInfo(c, relayFormat, request, ws)
+	effectiveRelayFormat := relayFormat
+	chatImageCompat := false
+	if relayFormat == types.RelayFormatOpenAI {
+		if textRequest, ok := request.(*dto.GeneralOpenAIRequest); ok && relay.ShouldUseChatImageCompatibility(c, textRequest) {
+			c.Set("chat_image_compat_stream", textRequest.Stream != nil && *textRequest.Stream)
+			imageRequest, convertErr := relay.ConvertChatCompletionsToImageRequest(textRequest)
+			if convertErr != nil {
+				newAPIError = types.NewError(convertErr, types.ErrorCodeInvalidRequest, types.ErrOptionWithSkipRetry())
+				return
+			}
+			if replaceErr := relay.ReplaceChatImageCompatibilityRequestBody(c, imageRequest); replaceErr != nil {
+				newAPIError = types.NewError(replaceErr, types.ErrorCodeInvalidRequest, types.ErrOptionWithSkipRetry())
+				return
+			}
+			request = imageRequest
+			effectiveRelayFormat = types.RelayFormatOpenAIImage
+			chatImageCompat = true
+		}
+	}
+
+	relayInfo, err := relaycommon.GenRelayInfo(c, effectiveRelayFormat, request, ws)
 	if err != nil {
 		newAPIError = types.NewError(err, types.ErrorCodeGenRelayInfoFailed)
 		return
+	}
+	if chatImageCompat {
+		relay.PrepareChatImageCompatibilityRelayInfo(relayInfo)
 	}
 
 	needSensitiveCheck := setting.ShouldCheckPromptSensitive()
@@ -214,15 +237,19 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 		c.Request.Body = io.NopCloser(bodyStorage)
 
-		switch relayFormat {
-		case types.RelayFormatOpenAIRealtime:
-			newAPIError = relay.WssHelper(c, relayInfo)
-		case types.RelayFormatClaude:
-			newAPIError = relay.ClaudeHelper(c, relayInfo)
-		case types.RelayFormatGemini:
-			newAPIError = geminiRelayHandler(c, relayInfo)
-		default:
-			newAPIError = relayHandler(c, relayInfo)
+		if chatImageCompat {
+			newAPIError = relay.ChatImageCompatibilityHelper(c, relayInfo)
+		} else {
+			switch relayFormat {
+			case types.RelayFormatOpenAIRealtime:
+				newAPIError = relay.WssHelper(c, relayInfo)
+			case types.RelayFormatClaude:
+				newAPIError = relay.ClaudeHelper(c, relayInfo)
+			case types.RelayFormatGemini:
+				newAPIError = geminiRelayHandler(c, relayInfo)
+			default:
+				newAPIError = relayHandler(c, relayInfo)
+			}
 		}
 
 		if newAPIError == nil {

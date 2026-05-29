@@ -36,6 +36,7 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 	if err != nil {
 		return types.NewError(fmt.Errorf("failed to copy request to ImageRequest: %w", err), types.ErrorCodeInvalidRequest, types.ErrOptionWithSkipRetry())
 	}
+	c.Set("image_request_stream", request.IsStream(c))
 
 	err = helper.ModelMappedHelper(c, info, request)
 	if err != nil {
@@ -50,7 +51,7 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 
 	var requestBody io.Reader
 
-	if model_setting.GetGlobalSettings().PassThroughRequestEnabled || info.ChannelSetting.PassThroughBodyEnabled {
+	if (model_setting.GetGlobalSettings().PassThroughRequestEnabled || info.ChannelSetting.PassThroughBodyEnabled) && !c.GetBool(chatImageCompatibilityContextKey) {
 		storage, err := common.GetBodyStorage(c)
 		if err != nil {
 			return types.NewErrorWithStatusCode(err, types.ErrorCodeReadRequestBodyFailed, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
@@ -116,7 +117,7 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 	}
 
 	var captureWriter *imageResponseCaptureWriter
-	if shouldPersistSyncImageResponse(info) {
+	if shouldPersistSyncImageResponse(c, info) {
 		captureWriter = &imageResponseCaptureWriter{ResponseWriter: c.Writer}
 		c.Writer = captureWriter
 	}
@@ -195,8 +196,9 @@ func (w *imageResponseCaptureWriter) WriteString(s string) (int, error) {
 	return w.ResponseWriter.WriteString(s)
 }
 
-func shouldPersistSyncImageResponse(info *relaycommon.RelayInfo) bool {
+func shouldPersistSyncImageResponse(c *gin.Context, info *relaycommon.RelayInfo) bool {
 	return info != nil &&
+		(c == nil || !c.GetBool(chatImageCompatibilitySkipImagePersistKey)) &&
 		!info.IsStream &&
 		(info.RelayMode == relayconstant.RelayModeImagesGenerations ||
 			info.RelayMode == relayconstant.RelayModeImagesEdits)
