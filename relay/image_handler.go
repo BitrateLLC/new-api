@@ -42,6 +42,10 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 	if err != nil {
 		return types.NewError(err, types.ErrorCodeChannelModelMappedError, types.ErrOptionWithSkipRetry())
 	}
+	forceUpstreamStream := shouldForceUpstreamImageStream(info, request)
+	if forceUpstreamStream {
+		request.Stream = common.GetPointer(true)
+	}
 
 	adaptor := GetAdaptor(info.ApiType)
 	if adaptor == nil {
@@ -51,7 +55,7 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 
 	var requestBody io.Reader
 
-	if (model_setting.GetGlobalSettings().PassThroughRequestEnabled || info.ChannelSetting.PassThroughBodyEnabled) && !c.GetBool(chatImageCompatibilityContextKey) {
+	if (model_setting.GetGlobalSettings().PassThroughRequestEnabled || info.ChannelSetting.PassThroughBodyEnabled) && !c.GetBool(chatImageCompatibilityContextKey) && !forceUpstreamStream {
 		storage, err := common.GetBodyStorage(c)
 		if err != nil {
 			return types.NewErrorWithStatusCode(err, types.ErrorCodeReadRequestBodyFailed, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
@@ -202,6 +206,18 @@ func shouldPersistSyncImageResponse(c *gin.Context, info *relaycommon.RelayInfo)
 		!info.IsStream &&
 		(info.RelayMode == relayconstant.RelayModeImagesGenerations ||
 			info.RelayMode == relayconstant.RelayModeImagesEdits)
+}
+
+func shouldForceUpstreamImageStream(info *relaycommon.RelayInfo, request *dto.ImageRequest) bool {
+	return info != nil &&
+		info.ChannelMeta != nil &&
+		request != nil &&
+		info.ApiType == constant.APITypeOpenAI &&
+		(info.RelayMode == relayconstant.RelayModeImagesGenerations ||
+			info.RelayMode == relayconstant.RelayModeImagesEdits) &&
+		strings.EqualFold(request.Model, "gpt-image-2") &&
+		!request.IsStream(nil) &&
+		!request.Async
 }
 
 func persistSyncImageResponse(c *gin.Context, info *relaycommon.RelayInfo, request *dto.ImageRequest, responseBody []byte) {

@@ -11,6 +11,7 @@ import (
 	"net/textproto"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -462,10 +463,21 @@ func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInf
 				if key == "model" {
 					continue
 				}
+				// stream 由下方按 request.Stream 统一写入：当上游被强制流式
+				// （shouldForceUpstreamImageStream，用于规避 CDN 120s 空连接掐断）时，
+				// 客户端原始表单里的 stream（通常缺失或为 false）必须被覆盖，否则上游仍按
+				// 非流式处理。跳过此处避免重复写。
+				if key == "stream" {
+					continue
+				}
 				for _, value := range values {
 					writer.WriteField(key, value)
 				}
 			}
+		}
+		// 显式写入 stream，反映 request.Stream（可能已被 force-stream 改写为 true）。
+		if request.Stream != nil {
+			writer.WriteField("stream", strconv.FormatBool(*request.Stream))
 		}
 
 		if mf != nil && mf.File != nil {

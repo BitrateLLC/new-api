@@ -1,6 +1,7 @@
 package openai
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,7 +13,9 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
+	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/types"
@@ -103,6 +106,12 @@ func OpenaiImageStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp 
 	if !strings.Contains(contentType, "text/event-stream") {
 		return openaiImageJSONAsStreamHandler(c, info, resp)
 	}
+	if imageRequestStream, exists := c.Get("image_request_stream"); exists && !c.GetBool("chat_image_compat_stream") {
+		stream, _ := imageRequestStream.(bool)
+		if !stream {
+			return OpenaiImageStreamToJSONHandler(c, info, resp)
+		}
+	}
 	// Reuse the shared streaming engine (helper.StreamScannerHandler) so the
 	// image streaming path gets the same ping keepalive, streaming-timeout
 	// watchdog, client-disconnect detection, panic recovery and goroutine
@@ -165,6 +174,270 @@ func OpenaiImageStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp 
 		}
 	}
 	return usage, nil
+}
+
+func OpenaiImageStreamToJSONHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*dto.Usage, *types.NewAPIError) {
+	if resp == nil || resp.Body == nil {
+		return nil, types.NewOpenAIError(fmt.Errorf("invalid response"), types.ErrorCodeBadResponse, http.StatusInternalServerError)
+	}
+	defer service.CloseResponseBodyGracefully(resp)
+
+	c.Writer.Header().Set("Content-Type", "application/json")
+	c.Writer.Header().Set("Cache-Control", "no-cache")
+	c.Writer.Header().Set("X-Accel-Buffering", "no")
+	statusCode := resp.StatusCode
+	headerWritten := false
+
+	flusher, _ := c.Writer.(http.Flusher)
+	writeKeepAlive := func() error {
+		if !headerWritten {
+			c.Writer.WriteHeader(statusCode)
+			headerWritten = true
+		}
+		if _, err := c.Writer.Write([]byte("\n")); err != nil {
+			return err
+		}
+		if flusher != nil {
+			flusher.Flush()
+		}
+		return nil
+	}
+
+	eventBuffer := ""
+	imageResp := dto.ImageResponse{
+		Created: time.Now().Unix(),
+		Data:    make([]dto.ImageData, 0),
+	}
+	taskID := model.GenerateTaskID()
+	usage := &dto.Usage{}
+	hasUsage := false
+
+	processEvent := func(rawEvent string) error {
+		streamUsage, imageData, keepAlive, err := convertImageStreamEventToJSONData(c, rawEvent, taskID)
+		if err != nil {
+			return err
+		}
+		if keepAlive {
+			return writeKeepAlive()
+		}
+		if streamUsage != nil {
+			usage = streamUsage
+			hasUsage = true
+		}
+		if imageData != nil {
+			imageResp.Data = append(imageResp.Data, *imageData)
+		}
+		return nil
+	}
+
+	buffer := make([]byte, 4096)
+	for {
+		n, readErr := resp.Body.Read(buffer)
+		if n > 0 {
+			if info != nil {
+				info.SetFirstResponseTime()
+			}
+			eventBuffer += strings.ReplaceAll(string(buffer[:n]), "\r\n", "\n")
+			for {
+				delimiterIndex := strings.Index(eventBuffer, "\n\n")
+				if delimiterIndex == -1 {
+					break
+				}
+				rawEvent := eventBuffer[:delimiterIndex]
+				eventBuffer = eventBuffer[delimiterIndex+2:]
+				if err := processEvent(rawEvent); err != nil {
+					return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
+				}
+			}
+		}
+		if readErr != nil {
+			if readErr != io.EOF {
+				logger.LogError(c, readErr.Error())
+			}
+			break
+		}
+	}
+
+	if strings.TrimSpace(eventBuffer) != "" {
+		if err := processEvent(eventBuffer); err != nil {
+			return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
+		}
+	}
+
+	if len(imageResp.Data) == 0 {
+		return nil, types.NewOpenAIError(fmt.Errorf("image stream completed without image data"), types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
+	}
+
+	body, err := common.Marshal(imageResp)
+	if err != nil {
+		return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
+	}
+	if !headerWritten {
+		c.Writer.WriteHeader(statusCode)
+		headerWritten = true
+	}
+	if _, err := c.Writer.Write(body); err != nil {
+		return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
+	}
+	if flusher != nil {
+		flusher.Flush()
+	}
+	// 这条路径是 Cherry Studio 等客户端"非流式请求被强制改成上游 stream"后的回写路径
+	// （shouldForceUpstreamImageStream）。此时 info.IsStream 已被污染为 true，
+	// image_handler.go 的 persistSyncImageResponse 不会触发，导致生图日志漏记。
+	// 在这里补写日志，url 取自 convertImageStreamEventToJSONData 已落 R2 的公链。
+	persistStreamToJSONImageLog(c, info, &imageResp)
+	if hasUsage {
+		return usage, nil
+	}
+	return &dto.Usage{PromptTokens: 1, TotalTokens: 1}, nil
+}
+
+// persistStreamToJSONImageLog 为 stream→JSON 聚合路径补写生图日志。
+// imageResp.Data 里的每个 item 已带 R2 公链（见 convertImageStreamEventToJSONData），
+// 直接取 Url 作为日志的 ImageUrls，不重复上传。
+func persistStreamToJSONImageLog(c *gin.Context, info *relaycommon.RelayInfo, imageResp *dto.ImageResponse) {
+	if c == nil || info == nil || imageResp == nil {
+		return
+	}
+	// 仅对真正的生图/改图请求落库；chat 兼容路径自带落库并设置 skip 标记，避免双写。
+	if c.GetBool("chat_image_compat_skip_image_persist") {
+		return
+	}
+	action := "image_generation"
+	if info.RelayMode == relayconstant.RelayModeImagesEdits {
+		action = "image_edit"
+	}
+	var model_, prompt string
+	if req, ok := info.Request.(*dto.ImageRequest); ok && req != nil {
+		model_ = req.Model
+		prompt = req.Prompt
+	}
+	if model_ == "" {
+		model_ = info.OriginModelName
+	}
+	urls := imageURLsFromStoredResponse(imageResp)
+	now := time.Now().Unix()
+	logEntry := &model.ImageGenerationLog{
+		CreatedAt:  now,
+		UpdatedAt:  now,
+		FinishedAt: now,
+		UserId:     info.UserId,
+		TokenId:    info.TokenId,
+		TokenName:  c.GetString("token_name"),
+		TaskID:     model.GenerateTaskID(),
+		Action:     action,
+		Model:      model_,
+		Prompt:     prompt,
+		Status:     model.TaskStatusSuccess,
+	}
+	logEntry.SetImageURLs(urls)
+	go func() {
+		if err := model.CreateImageGenerationLog(logEntry); err != nil {
+			logger.LogError(context.Background(), fmt.Sprintf("create stream-to-json image generation log failed: %s", err.Error()))
+		}
+	}()
+}
+
+// imageURLsFromStoredResponse 收集已落 R2 的公链，用于写入生图日志的 ImageUrls。
+// 只取非空 Url（b64_json 不入日志，避免数据库膨胀）。
+func imageURLsFromStoredResponse(resp *dto.ImageResponse) []string {
+	if resp == nil {
+		return nil
+	}
+	urls := make([]string, 0, len(resp.Data))
+	for _, item := range resp.Data {
+		if u := strings.TrimSpace(item.Url); u != "" {
+			urls = append(urls, u)
+		}
+	}
+	return urls
+}
+
+func convertImageStreamEventToJSONData(c *gin.Context, rawEvent string, taskID string) (*dto.Usage, *dto.ImageData, bool, error) {
+	rawEvent = strings.TrimSpace(rawEvent)
+	if rawEvent == "" {
+		return nil, nil, false, nil
+	}
+	if strings.HasPrefix(rawEvent, ":") {
+		return nil, nil, true, nil
+	}
+
+	eventName, data := parseOpenAIImageSSEFrame(rawEvent)
+	data = strings.TrimSpace(data)
+	if data == "" || data == "[DONE]" {
+		return nil, nil, false, nil
+	}
+	var payload map[string]interface{}
+	if err := common.Unmarshal([]byte(data), &payload); err != nil {
+		return nil, nil, false, err
+	}
+	payloadType, _ := payload["type"].(string)
+	if strings.Contains(strings.ToLower(eventName), "partial_image") ||
+		strings.Contains(strings.ToLower(payloadType), "partial_image") {
+		return nil, nil, false, nil
+	}
+	if !strings.HasSuffix(strings.ToLower(eventName), ".completed") &&
+		!strings.HasSuffix(strings.ToLower(payloadType), ".completed") {
+		eventLower := strings.ToLower(eventName)
+		typeLower := strings.ToLower(payloadType)
+		if strings.Contains(eventLower, "keep-alive") ||
+			strings.Contains(typeLower, "keep-alive") ||
+			strings.Contains(eventLower, "heartbeat") ||
+			strings.Contains(typeLower, "heartbeat") ||
+			strings.Contains(eventLower, "ping") ||
+			strings.Contains(typeLower, "ping") {
+			return nil, nil, true, nil
+		}
+		return nil, nil, false, nil
+	}
+
+	var usage *dto.Usage
+	if rawUsage, ok := payload["usage"]; ok {
+		usageBytes, err := common.Marshal(rawUsage)
+		if err == nil {
+			var parsedUsage dto.Usage
+			if common.Unmarshal(usageBytes, &parsedUsage) == nil {
+				normalizeOpenAIUsage(&parsedUsage)
+				usage = &parsedUsage
+			}
+		}
+	}
+
+	if url, _ := payload["url"].(string); strings.TrimSpace(url) != "" {
+		return usage, &dto.ImageData{Url: strings.TrimSpace(url)}, false, nil
+	}
+	b64, _ := payload["b64_json"].(string)
+	b64 = strings.TrimSpace(b64)
+	if b64 == "" {
+		return usage, nil, false, fmt.Errorf("image_generation.completed payload contains no b64_json or url")
+	}
+	// 保留 b64_json：Cherry Studio 的 OpenAICompatibleImageModel 请求 response_format=b64_json，
+	// 只读取 data[].b64_json。若这里只回 url，客户端读不到图，表现为请求成功但图丢失。
+	// 落存储仅为给 image log 附一个公网 url，是 best-effort —— 存储失败也不能丢掉这张图。
+	imageData := &dto.ImageData{B64Json: b64}
+	if storedResp, err := service.PersistImageResponseToStorage(c.Request.Context(), taskID, &dto.ImageResponse{
+		Data: []dto.ImageData{{B64Json: b64}},
+	}); err == nil && storedResp != nil && len(storedResp.Data) > 0 {
+		if u := strings.TrimSpace(storedResp.Data[0].Url); u != "" {
+			imageData.Url = u
+		}
+	}
+	return usage, imageData, false, nil
+}
+
+func parseOpenAIImageSSEFrame(frame string) (eventName string, data string) {
+	dataLines := make([]string, 0)
+	for _, line := range strings.Split(strings.ReplaceAll(frame, "\r\n", "\n"), "\n") {
+		line = strings.TrimRight(line, "\r")
+		switch {
+		case strings.HasPrefix(line, "event:"):
+			eventName = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
+		case strings.HasPrefix(line, "data:"):
+			dataLines = append(dataLines, strings.TrimSpace(strings.TrimPrefix(line, "data:")))
+		}
+	}
+	return eventName, strings.Join(dataLines, "\n")
 }
 
 // writeOpenaiImageStreamChunk rebuilds the SSE frame for an image stream chunk:
