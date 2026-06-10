@@ -89,8 +89,11 @@ func imageRequestFromMultipartForm(form *multipart.Form) *dto.ImageRequest {
 		Quality:        multipartFormValue(form, "quality"),
 		Size:           multipartFormValue(form, "size"),
 		ResponseFormat: multipartFormValue(form, "response_format"),
-		Stream:         multipartBoolValue(form, "stream"),
 		Async:          multipartBoolValue(form, "async"),
+	}
+	if multipartFormHas(form, "stream") {
+		stream := multipartBoolValue(form, "stream")
+		imageReq.Stream = &stream
 	}
 	imageReq.N = common.GetPointer(uint(common.String2Int(multipartFormValue(form, "n"))))
 	if background := multipartFormValue(form, "background"); background != "" {
@@ -373,7 +376,7 @@ func normalizeAsyncImageRequest(request *dto.ImageRequest) {
 	if request.ResponseFormat == "" {
 		request.ResponseFormat = "b64_json"
 	}
-	request.Stream = false
+	request.Stream = common.GetPointer(false)
 	request.Async = false
 	request.PartialImages = nil
 }
