@@ -49,11 +49,12 @@ func ConvertChatCompletionsToImageRequest(request *dto.GeneralOpenAIRequest) (*d
 	}
 
 	imageReq := &dto.ImageRequest{
-		Model:          request.Model,
-		Prompt:         prompt,
-		Size:           request.Size,
-		ResponseFormat: "b64_json",
-		Stream:         common.GetPointer(true),
+		Model:  request.Model,
+		Prompt: prompt,
+		Size:   request.Size,
+		// gpt-image-2 不接受 response_format（固定返回 b64_json），不要设置，
+		// 否则透传到官方会报 "Unknown parameter: 'response_format'."。
+		Stream: common.GetPointer(true),
 	}
 	n := uint(1)
 	if request.N != nil && *request.N > 0 {

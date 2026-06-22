@@ -43,6 +43,29 @@ const statusColor = {
   IN_PROGRESS: 'orange',
 };
 
+const hasImageUrls = (urls) =>
+  Array.isArray(urls) && urls.some((url) => typeof url === 'string' && url);
+
+const getDisplayStatus = (record, t) => {
+  if (
+    record?.storage_status === 'FAILED' ||
+    (record?.status === 'SUCCESS' &&
+      !hasImageUrls(record.image_urls) &&
+      record?.error)
+  ) {
+    return {
+      label: t('留存失败'),
+      color: 'orange',
+      title: record.error,
+    };
+  }
+  return {
+    label: record?.status || '-',
+    color: statusColor[record?.status] || 'grey',
+    title: record?.error || '',
+  };
+};
+
 const shortenText = (value, head = 12, tail = 8) => {
   if (!value || value.length <= head + tail + 3) return value;
   return `${value.slice(0, head)}...${value.slice(-tail)}`;
@@ -184,11 +207,14 @@ const ImageLog = () => {
         title: t('状态'),
         dataIndex: 'status',
         width: 100,
-        render: (value) => (
-          <Tag color={statusColor[value] || 'grey'} size='small'>
-            {value || '-'}
-          </Tag>
-        ),
+        render: (value, record) => {
+          const status = getDisplayStatus(record, t);
+          return (
+            <Tag color={status.color} size='small' title={status.title}>
+              {status.label}
+            </Tag>
+          );
+        },
       },
       {
         title: t('图片'),

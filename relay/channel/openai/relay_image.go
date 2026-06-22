@@ -121,14 +121,17 @@ func OpenaiImageStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp 
 	usage := &dto.Usage{}
 	var lastStreamData []byte
 	var completedImages int64
+	var streamErrMsg string
 
 	helper.StreamScannerHandler(c, resp, info, func(data string, sr *helper.StreamResult) {
 		raw := common.StringToByteSlice(data)
 		lastStreamData = raw
 		if isOpenAIImageStreamErrorEvent(raw) {
-			// Record the error as a soft error; the scanner drives the final
-			// EndReason. HasErrors() flags the failure for logging/handling.
-			sr.Error(fmt.Errorf("%s", extractOpenAIImageStreamErrorMessage(raw)))
+			// 记录为软错误以驱动 EndReason；同时捕获错误信息，流结束后作为硬错误
+			// 返回，避免上游安全拦截(safety_violations）被记成 SUCCESS 且无 image url。
+			msg := extractOpenAIImageStreamErrorMessage(raw)
+			streamErrMsg = msg
+			sr.Error(fmt.Errorf("%s", msg))
 		}
 		var chunk struct {
 			Type  string    `json:"type"`
@@ -173,6 +176,9 @@ func OpenaiImageStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp 
 			updateOpenAIImageCount(info, completedImages)
 		}
 	}
+	if strings.TrimSpace(streamErrMsg) != "" {
+		return usage, types.NewOpenAIError(fmt.Errorf("%s", streamErrMsg), types.ErrorCodeBadResponseBody, http.StatusBadGateway)
+	}
 	return usage, nil
 }
 
@@ -211,9 +217,11 @@ func OpenaiImageStreamToJSONHandler(c *gin.Context, info *relaycommon.RelayInfo,
 	taskID := model.GenerateTaskID()
 	usage := &dto.Usage{}
 	hasUsage := false
+	var lastPartial *dto.ImageData // 仅收到 partial_image、无可用 completed 帧时的兜底图
+	var rawBody strings.Builder    // 累计完整响应体，用于"假流式(整块 JSON)"回退解析
 
 	processEvent := func(rawEvent string) error {
-		streamUsage, imageData, keepAlive, err := convertImageStreamEventToJSONData(c, rawEvent, taskID)
+		streamUsage, imageData, keepAlive, partial, err := convertImageStreamEventToJSONData(c, rawEvent, taskID)
 		if err != nil {
 			return err
 		}
@@ -225,7 +233,11 @@ func OpenaiImageStreamToJSONHandler(c *gin.Context, info *relaycommon.RelayInfo,
 			hasUsage = true
 		}
 		if imageData != nil {
-			imageResp.Data = append(imageResp.Data, *imageData)
+			if partial {
+				lastPartial = imageData
+			} else {
+				imageResp.Data = append(imageResp.Data, *imageData)
+			}
 		}
 		return nil
 	}
@@ -237,6 +249,7 @@ func OpenaiImageStreamToJSONHandler(c *gin.Context, info *relaycommon.RelayInfo,
 			if info != nil {
 				info.SetFirstResponseTime()
 			}
+			rawBody.Write(buffer[:n])
 			eventBuffer += strings.ReplaceAll(string(buffer[:n]), "\r\n", "\n")
 			for {
 				delimiterIndex := strings.Index(eventBuffer, "\n\n")
@@ -265,7 +278,58 @@ func OpenaiImageStreamToJSONHandler(c *gin.Context, info *relaycommon.RelayInfo,
 	}
 
 	if len(imageResp.Data) == 0 {
-		return nil, types.NewOpenAIError(fmt.Errorf("image stream completed without image data"), types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
+		// 没有可用的 completed 帧时，用最后一帧 partial_image 兜底（补落存储换取公链）。
+		if lastPartial != nil {
+			if strings.TrimSpace(lastPartial.Url) == "" && strings.TrimSpace(lastPartial.B64Json) != "" {
+				if storedResp, err := service.PersistImageResponseToStorage(c.Request.Context(), taskID, &dto.ImageResponse{
+					Data: []dto.ImageData{{B64Json: lastPartial.B64Json}},
+				}); err == nil && storedResp != nil && len(storedResp.Data) > 0 {
+					if su := strings.TrimSpace(storedResp.Data[0].Url); su != "" {
+						lastPartial.Url = su
+					}
+				}
+			}
+			logger.LogWarn(c, "image stream had no completed frame; falling back to last partial image")
+			imageResp.Data = append(imageResp.Data, *lastPartial)
+		} else {
+			// 上游（如 cpa 直连代理 gpt-image）即使请求 stream=true，也可能在若干 SSE
+			// keep-alive 注释行(": keep-alive\n\n")之后，直接跟一整块裸 JSON 图片响应
+			// （Content-Type 仍是 text/event-stream，且 JSON 没有 data: 前缀）。按 SSE 切帧
+			// 取不到图片，这里去掉非 JSON 前缀后，把那块 JSON 当普通图片响应解析。
+			full := strings.TrimSpace(rawBody.String())
+			if start := strings.IndexByte(full, '{'); start >= 0 {
+				if end := strings.LastIndexByte(full, '}'); end >= start {
+					full = full[start : end+1]
+				}
+			}
+			if isOpenAIImageStreamErrorEvent([]byte(full)) {
+				return nil, types.NewOpenAIError(fmt.Errorf("%s", extractOpenAIImageStreamErrorMessage([]byte(full))), types.ErrorCodeBadResponseBody, http.StatusBadGateway)
+			}
+			var plain dto.ImageResponse
+			if err := common.Unmarshal([]byte(full), &plain); err == nil && len(plain.Data) > 0 {
+				imageResp.Data = plain.Data
+				if plain.Created != 0 {
+					imageResp.Created = plain.Created
+				}
+				var usageWrap dto.SimpleResponse
+				if common.Unmarshal([]byte(full), &usageWrap) == nil {
+					normalizeOpenAIUsage(&usageWrap.Usage)
+					if service.ValidUsage(&usageWrap.Usage) {
+						usage = &usageWrap.Usage
+						hasUsage = true
+					}
+				}
+			} else {
+				// 诊断:既非可识别 SSE、也无法当普通图片 JSON 解析时，打印上游响应体头部
+				// （截断 600 字，base64 通常不在开头，足以看清结构),便于定位 edits 真实形态。
+				snippet := full
+				if len(snippet) > 600 {
+					snippet = snippet[:600]
+				}
+				logger.LogError(c, fmt.Sprintf("image stream no data; upstream content-type=%q body_len=%d head=%q", resp.Header.Get("Content-Type"), len(full), snippet))
+				return nil, types.NewOpenAIError(fmt.Errorf("image stream completed without image data"), types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
+			}
+		}
 	}
 
 	body, err := common.Marshal(imageResp)
@@ -294,14 +358,17 @@ func OpenaiImageStreamToJSONHandler(c *gin.Context, info *relaycommon.RelayInfo,
 }
 
 // persistStreamToJSONImageLog 为 stream→JSON 聚合路径补写生图日志。
-// imageResp.Data 里的每个 item 已带 R2 公链（见 convertImageStreamEventToJSONData），
-// 直接取 Url 作为日志的 ImageUrls，不重复上传。
+// 客户端已拿到响应后，这里仍要确保图片被上传到 R2 并把公网 URL 写入日志。
 func persistStreamToJSONImageLog(c *gin.Context, info *relaycommon.RelayInfo, imageResp *dto.ImageResponse) {
 	if c == nil || info == nil || imageResp == nil {
 		return
 	}
 	// 仅对真正的生图/改图请求落库；chat 兼容路径自带落库并设置 skip 标记，避免双写。
 	if c.GetBool("chat_image_compat_skip_image_persist") {
+		return
+	}
+	// 异步图片任务内部重放：任务侧已写日志，这里跳过以免出现两条相同日志。
+	if c.GetBool("image_async_task_skip_image_persist") {
 		return
 	}
 	action := "image_generation"
@@ -316,8 +383,8 @@ func persistStreamToJSONImageLog(c *gin.Context, info *relaycommon.RelayInfo, im
 	if model_ == "" {
 		model_ = info.OriginModelName
 	}
-	urls := imageURLsFromStoredResponse(imageResp)
 	now := time.Now().Unix()
+	taskID := model.GenerateTaskID()
 	logEntry := &model.ImageGenerationLog{
 		CreatedAt:  now,
 		UpdatedAt:  now,
@@ -325,14 +392,24 @@ func persistStreamToJSONImageLog(c *gin.Context, info *relaycommon.RelayInfo, im
 		UserId:     info.UserId,
 		TokenId:    info.TokenId,
 		TokenName:  c.GetString("token_name"),
-		TaskID:     model.GenerateTaskID(),
+		TaskID:     taskID,
 		Action:     action,
 		Model:      model_,
 		Prompt:     prompt,
 		Status:     model.TaskStatusSuccess,
 	}
-	logEntry.SetImageURLs(urls)
 	go func() {
+		storedResp, err := service.PersistImageResponseToStorage(context.Background(), taskID, imageResp)
+		if err != nil {
+			logEntry.Error = fmt.Sprintf("image generated but storage failed: %s", err.Error())
+		} else {
+			urls := imageURLsFromStoredResponse(storedResp)
+			if len(urls) == 0 {
+				logEntry.Error = "image storage did not produce public URL"
+			} else {
+				logEntry.SetImageURLs(urls)
+			}
+		}
 		if err := model.CreateImageGenerationLog(logEntry); err != nil {
 			logger.LogError(context.Background(), fmt.Sprintf("create stream-to-json image generation log failed: %s", err.Error()))
 		}
@@ -347,49 +424,49 @@ func imageURLsFromStoredResponse(resp *dto.ImageResponse) []string {
 	}
 	urls := make([]string, 0, len(resp.Data))
 	for _, item := range resp.Data {
-		if u := strings.TrimSpace(item.Url); u != "" {
+		if u := strings.TrimSpace(item.Url); strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://") {
 			urls = append(urls, u)
 		}
 	}
 	return urls
 }
 
-func convertImageStreamEventToJSONData(c *gin.Context, rawEvent string, taskID string) (*dto.Usage, *dto.ImageData, bool, error) {
+func convertImageStreamEventToJSONData(c *gin.Context, rawEvent string, taskID string) (*dto.Usage, *dto.ImageData, bool, bool, error) {
 	rawEvent = strings.TrimSpace(rawEvent)
 	if rawEvent == "" {
-		return nil, nil, false, nil
+		return nil, nil, false, false, nil
 	}
 	if strings.HasPrefix(rawEvent, ":") {
-		return nil, nil, true, nil
+		return nil, nil, true, false, nil
 	}
 
 	eventName, data := parseOpenAIImageSSEFrame(rawEvent)
 	data = strings.TrimSpace(data)
 	if data == "" || data == "[DONE]" {
-		return nil, nil, false, nil
+		return nil, nil, false, false, nil
 	}
 	var payload map[string]interface{}
 	if err := common.Unmarshal([]byte(data), &payload); err != nil {
-		return nil, nil, false, err
+		return nil, nil, false, false, err
 	}
 	payloadType, _ := payload["type"].(string)
-	if strings.Contains(strings.ToLower(eventName), "partial_image") ||
-		strings.Contains(strings.ToLower(payloadType), "partial_image") {
-		return nil, nil, false, nil
+
+	// 上游错误事件：主动识别并抛出真实错误，避免被掩盖成 "image stream completed without image data"。
+	if isOpenAIImageStreamErrorEvent([]byte(data)) {
+		return nil, nil, false, false, fmt.Errorf("%s", extractOpenAIImageStreamErrorMessage([]byte(data)))
 	}
-	if !strings.HasSuffix(strings.ToLower(eventName), ".completed") &&
-		!strings.HasSuffix(strings.ToLower(payloadType), ".completed") {
-		eventLower := strings.ToLower(eventName)
-		typeLower := strings.ToLower(payloadType)
-		if strings.Contains(eventLower, "keep-alive") ||
-			strings.Contains(typeLower, "keep-alive") ||
-			strings.Contains(eventLower, "heartbeat") ||
-			strings.Contains(typeLower, "heartbeat") ||
-			strings.Contains(eventLower, "ping") ||
-			strings.Contains(typeLower, "ping") {
-			return nil, nil, true, nil
+
+	eventLower := strings.ToLower(eventName)
+	typeLower := strings.ToLower(payloadType)
+	isPartial := strings.Contains(eventLower, "partial_image") || strings.Contains(typeLower, "partial_image")
+	isCompleted := strings.HasSuffix(eventLower, ".completed") || strings.HasSuffix(typeLower, ".completed")
+	if !isPartial && !isCompleted {
+		if strings.Contains(eventLower, "keep-alive") || strings.Contains(typeLower, "keep-alive") ||
+			strings.Contains(eventLower, "heartbeat") || strings.Contains(typeLower, "heartbeat") ||
+			strings.Contains(eventLower, "ping") || strings.Contains(typeLower, "ping") {
+			return nil, nil, true, false, nil
 		}
-		return nil, nil, false, nil
+		return nil, nil, false, false, nil
 	}
 
 	var usage *dto.Usage
@@ -404,26 +481,79 @@ func convertImageStreamEventToJSONData(c *gin.Context, rawEvent string, taskID s
 		}
 	}
 
-	if url, _ := payload["url"].(string); strings.TrimSpace(url) != "" {
-		return usage, &dto.ImageData{Url: strings.TrimSpace(url)}, false, nil
+	// 兼容多种事件形态提取图片：images API（顶层 b64_json/url）、
+	// Responses API（partial_image_b64 / result）、以及嵌套 data[].b64_json/url。
+	if u := firstImageURLFromPayload(payload); u != "" {
+		return usage, &dto.ImageData{Url: u}, false, isPartial, nil
 	}
-	b64, _ := payload["b64_json"].(string)
-	b64 = strings.TrimSpace(b64)
+	b64 := firstImageB64FromPayload(payload)
 	if b64 == "" {
-		return usage, nil, false, fmt.Errorf("image_generation.completed payload contains no b64_json or url")
+		if isPartial {
+			return usage, nil, false, true, nil // 部分帧暂无数据，忽略
+		}
+		return usage, nil, false, false, fmt.Errorf("image completed payload contains no b64_json or url")
 	}
-	// 保留 b64_json：Cherry Studio 的 OpenAICompatibleImageModel 请求 response_format=b64_json，
-	// 只读取 data[].b64_json。若这里只回 url，客户端读不到图，表现为请求成功但图丢失。
-	// 落存储仅为给 image log 附一个公网 url，是 best-effort —— 存储失败也不能丢掉这张图。
+	if strings.HasPrefix(b64, "data:") { // dataURL 直接当作 url
+		return usage, &dto.ImageData{Url: b64}, false, isPartial, nil
+	}
+	// 保留 b64_json：部分客户端只读 data[].b64_json。落存储仅为给 image log 附公网 url，
+	// 是 best-effort；部分帧不落库，避免每帧重复上传。
 	imageData := &dto.ImageData{B64Json: b64}
-	if storedResp, err := service.PersistImageResponseToStorage(c.Request.Context(), taskID, &dto.ImageResponse{
-		Data: []dto.ImageData{{B64Json: b64}},
-	}); err == nil && storedResp != nil && len(storedResp.Data) > 0 {
-		if u := strings.TrimSpace(storedResp.Data[0].Url); u != "" {
-			imageData.Url = u
+	if !isPartial {
+		if storedResp, err := service.PersistImageResponseToStorage(c.Request.Context(), taskID, &dto.ImageResponse{
+			Data: []dto.ImageData{{B64Json: b64}},
+		}); err == nil && storedResp != nil && len(storedResp.Data) > 0 {
+			if su := strings.TrimSpace(storedResp.Data[0].Url); su != "" {
+				imageData.Url = su
+			}
 		}
 	}
-	return usage, imageData, false, nil
+	return usage, imageData, false, isPartial, nil
+}
+
+// firstImageURLFromPayload 从常见位置提取图片 url（顶层 url，或 data[].url）。
+func firstImageURLFromPayload(payload map[string]interface{}) string {
+	if s, ok := payload["url"].(string); ok {
+		if s = strings.TrimSpace(s); s != "" {
+			return s
+		}
+	}
+	if arr, ok := payload["data"].([]interface{}); ok {
+		for _, it := range arr {
+			if m, ok := it.(map[string]interface{}); ok {
+				if s, ok := m["url"].(string); ok {
+					if s = strings.TrimSpace(s); s != "" {
+						return s
+					}
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// firstImageB64FromPayload 从常见位置提取图片 base64（顶层 b64_json/partial_image_b64/result/image，
+// 或 data[].b64_json）。
+func firstImageB64FromPayload(payload map[string]interface{}) string {
+	for _, k := range []string{"b64_json", "partial_image_b64", "result", "image"} {
+		if s, ok := payload[k].(string); ok {
+			if s = strings.TrimSpace(s); s != "" {
+				return s
+			}
+		}
+	}
+	if arr, ok := payload["data"].([]interface{}); ok {
+		for _, it := range arr {
+			if m, ok := it.(map[string]interface{}); ok {
+				if s, ok := m["b64_json"].(string); ok {
+					if s = strings.TrimSpace(s); s != "" {
+						return s
+					}
+				}
+			}
+		}
+	}
+	return ""
 }
 
 func parseOpenAIImageSSEFrame(frame string) (eventName string, data string) {
@@ -454,54 +584,131 @@ func writeOpenaiImageStreamChunk(c *gin.Context, data []byte) error {
 	return helper.StringData(c, string(data))
 }
 
+// imageStreamSafetyMarkers 标记上游"安全/审核拦截"的特征子串。cpa 直连 codex
+// Image API 时，安全拦截(safety_violations）有时不带标准 error 信封(例如只给
+// detail / message / safety_violations)，靠这些标记兜底识别，避免被当成"无图"。
+var imageStreamSafetyMarkers = []string{
+	"safety system",
+	"rejected by the safety",
+	"safety_violation",
+	"content policy",
+	"content_policy",
+	"moderation_blocked",
+	"moderation blocked",
+}
+
+func imageStreamBodyHasSafetyMarker(s string) bool {
+	s = strings.ToLower(s)
+	for _, m := range imageStreamSafetyMarkers {
+		if strings.Contains(s, m) {
+			return true
+		}
+	}
+	return false
+}
+
+// jsonRawNonEmpty 判断一个原始 JSON 字段是否承载实际内容(排除空/ null /空容器/空串)。
+func jsonRawNonEmpty(raw json.RawMessage) bool {
+	switch strings.TrimSpace(string(raw)) {
+	case "", "null", "[]", "{}", `""`:
+		return false
+	default:
+		return true
+	}
+}
+
 // isOpenAIImageStreamErrorEvent detects upstream error chunks by JSON content
 // only ("type" of error/upstream_error, or a non-empty "error" field). The SSE
 // "event:" line is not available here: StreamScannerHandler delivers only the
 // "data:" payload. A payload carrying just a "message" key is deliberately NOT
-// treated as an error to avoid false positives.
+// treated as an error to avoid false positives — unless that message/detail
+// carries a safety/moderation marker, or the payload has non-empty
+// safety_violations (which is unambiguously an upstream rejection).
 func isOpenAIImageStreamErrorEvent(data []byte) bool {
 	if !json.Valid(data) {
 		return false
 	}
 	var payload struct {
-		Type  string          `json:"type"`
-		Error json.RawMessage `json:"error"`
+		Type             string          `json:"type"`
+		Error            json.RawMessage `json:"error"`
+		Detail           json.RawMessage `json:"detail"`
+		SafetyViolations json.RawMessage `json:"safety_violations"`
+		Message          string          `json:"message"`
 	}
 	if err := common.Unmarshal(data, &payload); err != nil {
 		return false
 	}
 	payloadType := strings.ToLower(strings.TrimSpace(payload.Type))
-	return payloadType == "error" || payloadType == "upstream_error" || len(payload.Error) > 0
+	if payloadType == "error" || payloadType == "upstream_error" || jsonRawNonEmpty(payload.Error) {
+		return true
+	}
+	// safety_violations 非空 = 明确的上游安全拦截。
+	if jsonRawNonEmpty(payload.SafetyViolations) {
+		return true
+	}
+	// detail / message 仅在带 safety/审核标记时判定为错误，避免误伤正常帧。
+	if jsonRawNonEmpty(payload.Detail) && imageStreamBodyHasSafetyMarker(string(payload.Detail)) {
+		return true
+	}
+	if payload.Message != "" && imageStreamBodyHasSafetyMarker(payload.Message) {
+		return true
+	}
+	return false
 }
 
 func extractOpenAIImageStreamErrorMessage(data []byte) string {
+	const fallback = "upstream image stream returned error event"
 	if len(data) == 0 || !json.Valid(data) {
-		return "upstream image stream returned error event"
+		return fallback
 	}
 	var payload struct {
-		Message string          `json:"message"`
-		Error   json.RawMessage `json:"error"`
+		Message          string          `json:"message"`
+		Detail           json.RawMessage `json:"detail"`
+		Error            json.RawMessage `json:"error"`
+		SafetyViolations json.RawMessage `json:"safety_violations"`
 	}
 	if err := common.Unmarshal(data, &payload); err != nil {
-		return "upstream image stream returned error event"
+		return fallback
 	}
-	if msg := strings.TrimSpace(payload.Message); msg != "" {
-		return msg
-	}
-	if len(payload.Error) > 0 {
+
+	msg := ""
+	switch {
+	case jsonRawNonEmpty(payload.Error):
 		var nested struct {
 			Message string `json:"message"`
 		}
 		if err := common.Unmarshal(payload.Error, &nested); err == nil {
-			if msg := strings.TrimSpace(nested.Message); msg != "" {
-				return msg
+			msg = strings.TrimSpace(nested.Message)
+		}
+		if msg == "" {
+			if s := strings.TrimSpace(common.JsonRawMessageToString(payload.Error)); s != "" && s != "null" {
+				msg = s
 			}
 		}
-		if msg := strings.TrimSpace(common.JsonRawMessageToString(payload.Error)); msg != "" {
-			return msg
+	case strings.TrimSpace(payload.Message) != "":
+		msg = strings.TrimSpace(payload.Message)
+	case jsonRawNonEmpty(payload.Detail):
+		// detail 可能是字符串或对象：先按字符串解，失败则用原始 JSON。
+		var detailStr string
+		if common.Unmarshal(payload.Detail, &detailStr) == nil && strings.TrimSpace(detailStr) != "" {
+			msg = strings.TrimSpace(detailStr)
+		} else {
+			msg = strings.TrimSpace(string(payload.Detail))
 		}
 	}
-	return "upstream image stream returned error event"
+
+	// 附带 safety_violations(若有），便于客户端/日志看清拦截原因。
+	if jsonRawNonEmpty(payload.SafetyViolations) {
+		if msg == "" {
+			msg = "request was rejected by the upstream safety system"
+		}
+		msg = msg + " safety_violations=" + strings.TrimSpace(string(payload.SafetyViolations))
+	}
+
+	if msg == "" {
+		return fallback
+	}
+	return msg
 }
 
 func openaiImageJSONAsStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*dto.Usage, *types.NewAPIError) {
