@@ -434,7 +434,10 @@ func TestOpenaiImageStreamHandlerRecordsUpstreamErrorEvent(t *testing.T) {
 	c, recorder, resp, info := newImageTestContext(t, body, "text/event-stream", true)
 
 	usage, err := OpenaiImageStreamHandler(c, info, resp)
-	require.Nil(t, err)
+	// 检测到上游错误事件后，处理器返回硬错误，使该请求被记为失败而非 SUCCESS
+	// （此前返回 nil 会导致"显示 SUCCESS 但无 image url"）。
+	require.NotNil(t, err)
+	require.Contains(t, err.ToOpenAIError().Message, "INTERNAL_ERROR")
 	require.NotNil(t, usage)
 	require.NotNil(t, info.StreamStatus)
 	require.Equal(t, relaycommon.StreamEndReasonEOF, info.StreamStatus.EndReason)
@@ -446,4 +449,70 @@ func TestOpenaiImageStreamHandlerRecordsUpstreamErrorEvent(t *testing.T) {
 	// is still forwarded in the data: payload (stream ID 77).
 	require.Contains(t, recorder.Body.String(), `event: upstream_error`)
 	require.Contains(t, recorder.Body.String(), `stream ID 77`)
+}
+
+// TestIsOpenAIImageStreamErrorEventDetectsSafetyShapes 锁住对 cpa 直连 codex Image
+// API 安全拦截的识别契约：除标准 error 信封外，safety_violations 以及带 safety/审核
+// 标记的 detail/message 也必须被判定为错误；正常图片帧与普通 message 不得误判。
+func TestIsOpenAIImageStreamErrorEventDetectsSafetyShapes(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		want bool
+	}{
+		{"standard error envelope", `{"error":{"message":"boom"}}`, true},
+		{"type error", `{"type":"error"}`, true},
+		{"type upstream_error", `{"type":"upstream_error"}`, true},
+		{"safety_violations only", `{"safety_violations":["sexual"]}`, true},
+		{"detail with safety marker", `{"detail":"Your request was rejected by the safety system"}`, true},
+		{"message with safety marker", `{"message":"rejected by the safety system","safety_violations":["sexual"]}`, true},
+		{"completed image frame", `{"type":"image_generation.completed","b64_json":"xxx"}`, false},
+		{"benign message only", `{"message":"generating"}`, false},
+		{"error null", `{"error":null}`, false},
+		{"not json", `: keep-alive`, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, isOpenAIImageStreamErrorEvent([]byte(tc.body)))
+		})
+	}
+}
+
+// TestExtractOpenAIImageStreamErrorMessageSafety 验证错误信息提取覆盖安全拦截形态，
+// 并把 safety_violations 附在信息里便于排查。
+func TestExtractOpenAIImageStreamErrorMessageSafety(t *testing.T) {
+	msg := extractOpenAIImageStreamErrorMessage([]byte(`{"message":"Your request was rejected by the safety system","safety_violations":["sexual"]}`))
+	require.Contains(t, msg, "rejected by the safety system")
+	require.Contains(t, msg, `safety_violations=["sexual"]`)
+
+	msg2 := extractOpenAIImageStreamErrorMessage([]byte(`{"error":{"message":"content moderation failed"}}`))
+	require.Equal(t, "content moderation failed", msg2)
+
+	msg3 := extractOpenAIImageStreamErrorMessage([]byte(`{"safety_violations":["sexual"]}`))
+	require.Contains(t, msg3, "safety system")
+	require.Contains(t, msg3, `safety_violations=["sexual"]`)
+}
+
+// TestOpenaiImageStreamToJSONHandlerSurfacesSafetyError 验证"客户端非流式被强制上游
+// 流式"路径下，混在 keep-alive 之后的安全拦截事件(无标准 error 信封）会被上浮为错误，
+// 而不是被掩盖成 "image stream completed without image data"。
+func TestOpenaiImageStreamToJSONHandlerSurfacesSafetyError(t *testing.T) {
+	oldMode := gin.Mode()
+	gin.SetMode(gin.TestMode)
+	t.Cleanup(func() { gin.SetMode(oldMode) })
+
+	body := strings.Join([]string{
+		`: keep-alive`,
+		``,
+		`event: error`,
+		`data: {"message":"Your request was rejected by the safety system","safety_violations":["sexual"]}`,
+		``,
+	}, "\n")
+
+	c, _, resp, info := newImageTestContext(t, body, "text/event-stream", true)
+	c.Set("image_request_stream", false)
+
+	_, err := OpenaiImageStreamHandler(c, info, resp)
+	require.NotNil(t, err)
+	require.Contains(t, err.ToOpenAIError().Message, "safety system")
 }

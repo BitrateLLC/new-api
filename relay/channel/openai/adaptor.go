@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image/jpeg"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -435,6 +436,12 @@ func (a *Adaptor) ConvertAudioRequest(c *gin.Context, info *relaycommon.RelayInf
 }
 
 func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.ImageRequest) (any, error) {
+	// OpenAI 的 gpt-image 系列不接受 response_format（固定返回 b64_json），
+	// 透传该参数会被官方拒绝并报 "Unknown parameter: 'response_format'."，因此剥掉。
+	dropResponseFormat := imageModelRejectsResponseFormat(request.Model)
+	if dropResponseFormat {
+		request.ResponseFormat = ""
+	}
 	switch info.RelayMode {
 	case relayconstant.RelayModeImagesEdits:
 		if isJSONRequest(c) {
@@ -463,11 +470,20 @@ func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInf
 				if key == "model" {
 					continue
 				}
+				// group 是 new-api 的分组路由参数，用完即弃，不能转发给上游
+				// （否则官方报 unknown parameter: 'group'）。
+				if key == "group" {
+					continue
+				}
 				// stream 由下方按 request.Stream 统一写入：当上游被强制流式
 				// （shouldForceUpstreamImageStream，用于规避 CDN 120s 空连接掐断）时，
 				// 客户端原始表单里的 stream（通常缺失或为 false）必须被覆盖，否则上游仍按
 				// 非流式处理。跳过此处避免重复写。
 				if key == "stream" {
+					continue
+				}
+				// gpt-image 系列不接受 response_format，剥掉以免被官方拒绝。
+				if dropResponseFormat && key == "response_format" {
 					continue
 				}
 				for _, value := range values {
@@ -511,6 +527,11 @@ func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInf
 				if err != nil {
 					return nil, fmt.Errorf("failed to open image file %d: %w", i, err)
 				}
+				rawImage, err := io.ReadAll(file)
+				_ = file.Close()
+				if err != nil {
+					return nil, fmt.Errorf("read image file %d: %w", i, err)
+				}
 
 				// If multiple images, use image[] as the field name
 				fieldName := "image"
@@ -519,11 +540,19 @@ func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInf
 				}
 
 				// Determine MIME type based on file extension
-				mimeType := detectImageMimeType(fileHeader.Filename)
+				filename := fileHeader.Filename
+				mimeType := detectImageMimeType(filename)
+				// MPO（手机 3D/动态/景深照片，JPEG 容器内含 MPF 多帧段）官方不接受，
+				// 会报 "Unsupported image format: mpo"。命中则解主图重编码为单帧 JPEG。
+				if normalized, ok := normalizeMpoImageToJpeg(rawImage); ok {
+					rawImage = normalized
+					mimeType = "image/jpeg"
+					filename = strings.TrimSuffix(filename, filepath.Ext(filename)) + ".jpg"
+				}
 
 				// Create a form file with the appropriate content type
 				h := make(textproto.MIMEHeader)
-				h.Set("Content-Disposition", fmt.Sprintf(`form-data; name="%s"; filename="%s"`, fieldName, fileHeader.Filename))
+				h.Set("Content-Disposition", fmt.Sprintf(`form-data; name="%s"; filename="%s"`, fieldName, filename))
 				h.Set("Content-Type", mimeType)
 
 				part, err := writer.CreatePart(h)
@@ -531,12 +560,9 @@ func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInf
 					return nil, fmt.Errorf("create form part failed for image %d: %w", i, err)
 				}
 
-				if _, err := io.Copy(part, file); err != nil {
-					return nil, fmt.Errorf("copy file failed for image %d: %w", i, err)
+				if _, err := part.Write(rawImage); err != nil {
+					return nil, fmt.Errorf("write file failed for image %d: %w", i, err)
 				}
-
-				// 复制完立即关闭，避免在循环内使用 defer 占用资源
-				_ = file.Close()
 			}
 
 			// Handle mask file if present
@@ -584,6 +610,39 @@ func isJSONRequest(c *gin.Context) bool {
 		return false
 	}
 	return strings.HasPrefix(c.Request.Header.Get("Content-Type"), "application/json")
+}
+
+// imageModelRejectsResponseFormat 判断上游图片模型是否拒绝 response_format 参数。
+// OpenAI 的 gpt-image 家族（gpt-image-1 / gpt-image-2 / gpt-image-1.5 等）固定返回
+// b64_json，不接受 response_format；dall-e 系列则支持。
+func imageModelRejectsResponseFormat(model string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(model)), "gpt-image")
+}
+
+// normalizeMpoImageToJpeg 检测 MPO（Multi-Picture Object：基于 JPEG、内含 MPF 多帧段的
+// 多图格式，常见于手机的 3D/动态/景深照片），命中则解码主图并重编码为单帧 JPEG。
+// 官方图片接口不接受 mpo，会返回 "Unsupported image format: mpo"。
+// 非 MPO 或解码失败时返回原数据、ok=false（不破坏请求）。
+func normalizeMpoImageToJpeg(raw []byte) ([]byte, bool) {
+	if len(raw) < 4 || raw[0] != 0xFF || raw[1] != 0xD8 {
+		return raw, false // 非 JPEG 起始；MPO 必为 JPEG 起始
+	}
+	head := raw
+	if len(head) > 256*1024 {
+		head = head[:256*1024]
+	}
+	if !bytes.Contains(head, []byte("MPF\x00")) {
+		return raw, false // 无 MPF 标记，不是 MPO
+	}
+	img, err := jpeg.Decode(bytes.NewReader(raw))
+	if err != nil {
+		return raw, false
+	}
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 95}); err != nil {
+		return raw, false
+	}
+	return buf.Bytes(), true
 }
 
 // detectImageMimeType determines the MIME type based on the file extension

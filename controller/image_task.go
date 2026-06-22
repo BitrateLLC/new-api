@@ -187,7 +187,7 @@ func RelayImageTaskSubmit(c *gin.Context, request *dto.ImageRequest, bodyBytes [
 		ModelPrice:      relayInfo.PriceData.ModelPrice,
 		GroupRatio:      relayInfo.PriceData.GroupRatioInfo.GroupRatio,
 		ModelRatio:      relayInfo.PriceData.ModelRatio,
-		OtherRatios:     relayInfo.PriceData.OtherRatios,
+		OtherRatios:     relayInfo.PriceData.OtherRatios(),
 		OriginModelName: relayInfo.OriginModelName,
 		PerCallBilling:  relayInfo.PriceData.UsePrice,
 	}
@@ -308,16 +308,61 @@ func runImageTask(snapshot imageTaskSnapshot) {
 	}
 
 	var imageResp dto.ImageResponse
-	if err := json.Unmarshal(recorder.Body.Bytes(), &imageResp); err != nil {
+	bodyBytes := recorder.Body.Bytes()
+
+	// 检测是否为流式响应 (SSE 格式)
+	contentType := recorder.Header().Get("Content-Type")
+	if strings.Contains(contentType, "text/event-stream") || isSSEFormat(bodyBytes) {
+		// 尝试从 SSE 流中提取图像数据
+		parsedResp, parseErr := parseImageResponseFromSSE(ctx, bodyBytes, snapshot.TaskID)
+		if parseErr != nil {
+			// 记录前 600 字节用于诊断
+			snippet := string(bodyBytes)
+			if len(snippet) > 600 {
+				snippet = snippet[:600]
+			}
+			logger.LogError(ctx, fmt.Sprintf("parse SSE image response failed: %v, content-type=%q, body_head=%q", parseErr, contentType, snippet))
+			refundImageTask(snapshot, ginCtx)
+			failImageTask(task, fmt.Errorf("parse SSE image response: %w", parseErr))
+			return
+		}
+		imageResp = *parsedResp
+	} else {
+		// 原有的 JSON 解析逻辑
+		if err := json.Unmarshal(bodyBytes, &imageResp); err != nil {
+			// 记录前 600 字节用于诊断
+			snippet := string(bodyBytes)
+			if len(snippet) > 600 {
+				snippet = snippet[:600]
+			}
+			logger.LogError(ctx, fmt.Sprintf("parse JSON image response failed: %v, body_head=%q", err, snippet))
+			refundImageTask(snapshot, ginCtx)
+			failImageTask(task, fmt.Errorf("parse image response: %w", err))
+			return
+		}
+	}
+	// 验证响应中至少有一张图片
+	if len(imageResp.Data) == 0 {
+		logger.LogError(ctx, fmt.Sprintf("image response contains no data"))
 		refundImageTask(snapshot, ginCtx)
-		failImageTask(task, fmt.Errorf("parse image response: %w", err))
+		failImageTask(task, fmt.Errorf("image response contains no data"))
 		return
 	}
+
 	storedResp, err := service.PersistImageResponseToStorage(ctx, snapshot.TaskID, &imageResp)
+	storageError := ""
 	if err != nil {
-		refundImageTask(snapshot, ginCtx)
-		failImageTask(task, err)
-		return
+		logger.LogError(ctx, fmt.Sprintf("persist image to storage failed: %v", err))
+		storageError = fmt.Sprintf("image generated but storage failed: %s", err.Error())
+		storedResp = &imageResp
+	}
+
+	urls := imageURLsFromResponse(storedResp)
+	if len(urls) == 0 {
+		logger.LogError(ctx, fmt.Sprintf("image storage did not produce public URL"))
+		if storageError == "" {
+			storageError = "image storage did not produce public URL"
+		}
 	}
 
 	now := time.Now().Unix()
@@ -332,7 +377,7 @@ func runImageTask(snapshot imageTaskSnapshot) {
 	if err := task.Update(); err != nil {
 		logger.LogError(ctx, fmt.Sprintf("update image task success failed: %s", err.Error()))
 	}
-	if err := model.UpdateImageGenerationLog(task.TaskID, task.Status, task.FinishTime, "", imageURLsFromResponse(storedResp)); err != nil {
+	if err := model.UpdateImageGenerationLog(task.TaskID, task.Status, task.FinishTime, storageError, urls); err != nil {
 		logger.LogError(ctx, fmt.Sprintf("update image generation log success failed: %s", err.Error()))
 	}
 }
@@ -366,6 +411,10 @@ func buildImageTaskGinContext(snapshot imageTaskSnapshot, recorder *httptest.Res
 		return nil, err
 	}
 	ginCtx.Set(common.KeyBodyStorage, storage)
+	// 异步任务已自行落库并写生图日志，标记跳过 ImageHelper 内部的落库/补日志，避免双写。
+	ginCtx.Set(relay.ImageAsyncTaskSkipImagePersistKey, true)
+	// 标记这是异步任务，用于禁用上游强制流式传输
+	ginCtx.Set("is_async_image_task", true)
 	return ginCtx, nil
 }
 
@@ -373,12 +422,22 @@ func normalizeAsyncImageRequest(request *dto.ImageRequest) {
 	if request == nil {
 		return
 	}
-	if request.ResponseFormat == "" {
+	// gpt-image 系列不接受 response_format（固定返回 b64_json），不要为它补默认值，
+	// 否则透传模式下会把该参数发给官方并报 "Unknown parameter: 'response_format'."。
+	if request.ResponseFormat == "" && !imageModelRejectsResponseFormat(request.Model) {
 		request.ResponseFormat = "b64_json"
 	}
+	// 异步任务强制禁用流式传输，避免 SSE 格式导致解析失败
 	request.Stream = common.GetPointer(false)
 	request.Async = false
 	request.PartialImages = nil
+}
+
+// imageModelRejectsResponseFormat 判断上游图片模型是否拒绝 response_format 参数。
+// OpenAI 的 gpt-image 家族（gpt-image-1 / gpt-image-2 / gpt-image-1.5 等）固定返回
+// b64_json，不接受 response_format；dall-e 系列则支持。
+func imageModelRejectsResponseFormat(model string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(model)), "gpt-image")
 }
 
 func imageTaskPayload(c *gin.Context, request *dto.ImageRequest, relayMode int) ([]byte, http.Header, error) {
@@ -430,7 +489,9 @@ func buildImageEditTaskMultipartBody(c *gin.Context, request *dto.ImageRequest) 
 func writeImageTaskFormFields(writer *multipart.Writer, form *multipart.Form, request *dto.ImageRequest) {
 	written := make(map[string]bool)
 	for key, values := range form.Value {
-		if key == "async" || key == "stream" || key == "partial_images" {
+		// group 是 new-api 的分组路由参数，async/stream/partial_images 为本地控制参数，
+		// 均不应转发给上游（否则官方报 unknown parameter）。
+		if key == "async" || key == "stream" || key == "partial_images" || key == "group" {
 			continue
 		}
 		for _, value := range values {
@@ -561,8 +622,8 @@ func firstImageURL(resp *dto.ImageResponse) string {
 		return ""
 	}
 	for _, item := range resp.Data {
-		if item.Url != "" {
-			return item.Url
+		if u := strings.TrimSpace(item.Url); strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://") {
+			return u
 		}
 	}
 	return ""
@@ -651,10 +712,9 @@ func imageURLsFromResponse(resp *dto.ImageResponse) []string {
 	}
 	urls := make([]string, 0, len(resp.Data))
 	for _, item := range resp.Data {
-		if strings.TrimSpace(item.Url) == "" {
-			continue
+		if u := strings.TrimSpace(item.Url); strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://") {
+			urls = append(urls, u)
 		}
-		urls = append(urls, item.Url)
 	}
 	return urls
 }
@@ -679,24 +739,39 @@ func imageGenerationLogQueryParams(c *gin.Context, allowTokenFilter bool) model.
 func imageGenerationLogsToDto(logs []*model.ImageGenerationLog) []dto.ImageGenerationLogItem {
 	items := make([]dto.ImageGenerationLogItem, 0, len(logs))
 	for _, log := range logs {
+		imageURLs := log.GetImageURLs()
 		items = append(items, dto.ImageGenerationLogItem{
-			ID:         log.ID,
-			TaskID:     log.TaskID,
-			UserID:     log.UserId,
-			TokenID:    log.TokenId,
-			TokenName:  log.TokenName,
-			Action:     log.Action,
-			Model:      log.Model,
-			Prompt:     log.Prompt,
-			Status:     string(log.Status),
-			Error:      log.Error,
-			ImageUrls:  log.GetImageURLs(),
-			CreatedAt:  log.CreatedAt,
-			UpdatedAt:  log.UpdatedAt,
-			FinishedAt: log.FinishedAt,
+			ID:            log.ID,
+			TaskID:        log.TaskID,
+			UserID:        log.UserId,
+			TokenID:       log.TokenId,
+			TokenName:     log.TokenName,
+			Action:        log.Action,
+			Model:         log.Model,
+			Prompt:        log.Prompt,
+			Status:        string(log.Status),
+			StorageStatus: imageLogStorageStatus(log, imageURLs),
+			Error:         log.Error,
+			ImageUrls:     imageURLs,
+			CreatedAt:     log.CreatedAt,
+			UpdatedAt:     log.UpdatedAt,
+			FinishedAt:    log.FinishedAt,
 		})
 	}
 	return items
+}
+
+func imageLogStorageStatus(log *model.ImageGenerationLog, imageURLs []string) string {
+	if log == nil || log.Status != model.TaskStatusSuccess {
+		return ""
+	}
+	if len(imageURLs) > 0 {
+		return "SUCCESS"
+	}
+	if strings.TrimSpace(log.Error) != "" {
+		return "FAILED"
+	}
+	return "PENDING"
 }
 
 func imageGenerationLogsToURLDto(logs []*model.ImageGenerationLog) []dto.ImageGenerationURLItem {
@@ -773,4 +848,177 @@ func respondOpenAIError(c *gin.Context, status int, message string) {
 			Code:    "image_task_error",
 		},
 	})
+}
+
+// isSSEFormat 检测数据是否为 SSE (Server-Sent Events) 格式
+func isSSEFormat(data []byte) bool {
+	s := string(data)
+	// SSE 格式特征：包含 "event:" 或 "data:" 行
+	return strings.Contains(s, "event:") || strings.Contains(s, "\ndata:") || strings.HasPrefix(s, "data:")
+}
+
+// parseImageResponseFromSSE 从 SSE 流中提取并合并图像数据
+func parseImageResponseFromSSE(ctx context.Context, sseData []byte, taskID string) (*dto.ImageResponse, error) {
+	if len(sseData) == 0 {
+		return nil, fmt.Errorf("empty SSE data")
+	}
+
+	imageResp := &dto.ImageResponse{
+		Created: time.Now().Unix(),
+		Data:    make([]dto.ImageData, 0),
+	}
+
+	// 按 SSE 规范分割事件（事件之间用 \n\n 分隔）
+	events := strings.Split(string(sseData), "\n\n")
+
+	var lastPartialImage *dto.ImageData
+
+	for _, event := range events {
+		event = strings.TrimSpace(event)
+		if event == "" || event == "data: [DONE]" {
+			continue
+		}
+
+		// 解析 SSE 事件
+		eventName, dataPayload := parseSSEEvent(event)
+		dataPayload = strings.TrimSpace(dataPayload)
+
+		if dataPayload == "" || dataPayload == "[DONE]" {
+			continue
+		}
+
+		// 尝试解析为 JSON
+		var payload map[string]interface{}
+		if err := json.Unmarshal([]byte(dataPayload), &payload); err != nil {
+			// 如果无法解析为 JSON，跳过此事件
+			continue
+		}
+
+		// 检查事件类型
+		eventType, _ := payload["type"].(string)
+		eventLower := strings.ToLower(eventName)
+		typeLower := strings.ToLower(eventType)
+
+		isPartial := strings.Contains(eventLower, "partial_image") || strings.Contains(typeLower, "partial_image")
+		isCompleted := strings.HasSuffix(eventLower, ".completed") || strings.HasSuffix(typeLower, ".completed")
+
+		if !isPartial && !isCompleted {
+			// 可能是心跳或其他事件，跳过
+			continue
+		}
+
+		// 提取图像数据
+		imageData := extractImageDataFromPayload(payload)
+		if imageData == nil {
+			continue
+		}
+
+		if isPartial {
+			// 保存最后一帧 partial 图像作为兜底
+			lastPartialImage = imageData
+		} else if isCompleted {
+			// 这是完成的图像
+			imageResp.Data = append(imageResp.Data, *imageData)
+		}
+	}
+
+	// 如果没有完成的图像，尝试使用最后一帧 partial 图像
+	if len(imageResp.Data) == 0 && lastPartialImage != nil {
+		logger.LogWarn(ctx, "no completed image in SSE stream, using last partial image")
+		imageResp.Data = append(imageResp.Data, *lastPartialImage)
+	}
+
+	// 如果还是没有图像数据，尝试从整个响应体中提取 JSON
+	if len(imageResp.Data) == 0 {
+		return parseImageResponseFromMixedContent(sseData)
+	}
+
+	if len(imageResp.Data) == 0 {
+		return nil, fmt.Errorf("no image data found in SSE stream")
+	}
+
+	return imageResp, nil
+}
+
+// parseSSEEvent 解析单个 SSE 事件，返回事件名和数据负载
+func parseSSEEvent(event string) (eventName string, data string) {
+	lines := strings.Split(event, "\n")
+	dataLines := make([]string, 0)
+
+	for _, line := range lines {
+		line = strings.TrimRight(line, "\r")
+		if strings.HasPrefix(line, "event:") {
+			eventName = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
+		} else if strings.HasPrefix(line, "data:") {
+			dataLines = append(dataLines, strings.TrimSpace(strings.TrimPrefix(line, "data:")))
+		}
+	}
+
+	return eventName, strings.Join(dataLines, "\n")
+}
+
+// extractImageDataFromPayload 从 payload 中提取图像数据
+func extractImageDataFromPayload(payload map[string]interface{}) *dto.ImageData {
+	imageData := &dto.ImageData{}
+
+	// 尝试多种方式提取 URL
+	if url, ok := payload["url"].(string); ok && strings.TrimSpace(url) != "" {
+		imageData.Url = strings.TrimSpace(url)
+		return imageData
+	}
+
+	// 尝试从 data 数组中提取
+	if dataArray, ok := payload["data"].([]interface{}); ok && len(dataArray) > 0 {
+		if firstItem, ok := dataArray[0].(map[string]interface{}); ok {
+			if url, ok := firstItem["url"].(string); ok && strings.TrimSpace(url) != "" {
+				imageData.Url = strings.TrimSpace(url)
+			}
+			if b64, ok := firstItem["b64_json"].(string); ok && strings.TrimSpace(b64) != "" {
+				imageData.B64Json = strings.TrimSpace(b64)
+			}
+			if imageData.Url != "" || imageData.B64Json != "" {
+				return imageData
+			}
+		}
+	}
+
+	// 尝试提取 base64 数据
+	for _, key := range []string{"b64_json", "partial_image_b64", "result", "image"} {
+		if b64, ok := payload[key].(string); ok && strings.TrimSpace(b64) != "" {
+			imageData.B64Json = strings.TrimSpace(b64)
+			return imageData
+		}
+	}
+
+	return nil
+}
+
+// parseImageResponseFromMixedContent 尝试从混合内容中提取 JSON 响应
+// 用于处理上游可能返回的"假流式"：SSE 头 + 完整 JSON body 的情况
+func parseImageResponseFromMixedContent(data []byte) (*dto.ImageResponse, error) {
+	content := string(data)
+
+	// 查找第一个 '{' 和最后一个 '}'，提取可能的 JSON
+	start := strings.IndexByte(content, '{')
+	if start < 0 {
+		return nil, fmt.Errorf("no JSON object found in content")
+	}
+
+	end := strings.LastIndexByte(content, '}')
+	if end < start {
+		return nil, fmt.Errorf("malformed JSON in content")
+	}
+
+	jsonContent := content[start : end+1]
+
+	var imageResp dto.ImageResponse
+	if err := json.Unmarshal([]byte(jsonContent), &imageResp); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON from mixed content: %w", err)
+	}
+
+	if len(imageResp.Data) == 0 {
+		return nil, fmt.Errorf("parsed JSON contains no image data")
+	}
+
+	return &imageResp, nil
 }

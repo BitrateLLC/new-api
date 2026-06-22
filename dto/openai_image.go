@@ -206,20 +206,21 @@ type ImageTaskResponse struct {
 }
 
 type ImageGenerationLogItem struct {
-	ID         int64    `json:"id"`
-	TaskID     string   `json:"task_id"`
-	UserID     int      `json:"user_id"`
-	TokenID    int      `json:"token_id,omitempty"`
-	TokenName  string   `json:"token_name,omitempty"`
-	Action     string   `json:"action"`
-	Model      string   `json:"model"`
-	Prompt     string   `json:"prompt,omitempty"`
-	Status     string   `json:"status"`
-	Error      string   `json:"error,omitempty"`
-	ImageUrls  []string `json:"image_urls"`
-	CreatedAt  int64    `json:"created_at"`
-	UpdatedAt  int64    `json:"updated_at"`
-	FinishedAt int64    `json:"finished_at,omitempty"`
+	ID            int64    `json:"id"`
+	TaskID        string   `json:"task_id"`
+	UserID        int      `json:"user_id"`
+	TokenID       int      `json:"token_id,omitempty"`
+	TokenName     string   `json:"token_name,omitempty"`
+	Action        string   `json:"action"`
+	Model         string   `json:"model"`
+	Prompt        string   `json:"prompt,omitempty"`
+	Status        string   `json:"status"`
+	StorageStatus string   `json:"storage_status,omitempty"`
+	Error         string   `json:"error,omitempty"`
+	ImageUrls     []string `json:"image_urls"`
+	CreatedAt     int64    `json:"created_at"`
+	UpdatedAt     int64    `json:"updated_at"`
+	FinishedAt    int64    `json:"finished_at,omitempty"`
 }
 
 type ImageGenerationURLItem struct {

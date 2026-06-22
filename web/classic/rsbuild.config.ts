@@ -10,6 +10,32 @@ const semiUiDir = path.resolve(
   path.dirname(require.resolve('@douyinfe/semi-ui')),
   '../..',
 );
+const semiDateFnsDir = path.dirname(
+  require.resolve('date-fns/package.json', { paths: [semiUiDir] }),
+);
+
+// classic 使用 @visactor/vchart@1.8.x(依赖 vrender 0.17.x),而 default 使用 vchart@2.x,
+// 会把更高版本的 vrender hoist 到顶层 node_modules。其中 vchart-semi-theme 会解析到那份
+// 高版本 vrender-core,与 vchart/react-vchart 用的 0.17.x 不一致,导致 VChart 渲染环境
+// 错乱(createCanvas is undefined,控制台图表页白屏)。这里把三个 vrender 包统一指向
+// classic 自带 vchart 依赖的那一份,保证整个 classic 包内只有一份 vrender。
+const vrenderAlias: Record<string, string> = {};
+try {
+  const vchartDir = path.dirname(
+    require.resolve('@visactor/vchart/package.json'),
+  );
+  for (const pkg of [
+    '@visactor/vrender-core',
+    '@visactor/vrender-kits',
+    '@visactor/vrender-components',
+  ]) {
+    vrenderAlias[pkg] = path.dirname(
+      require.resolve(`${pkg}/package.json`, { paths: [vchartDir] }),
+    );
+  }
+} catch {
+  // 解析失败则不加 alias,避免构建中断
+}
 
 export default defineConfig(({ envMode }) => {
   const env = loadEnv({ mode: envMode, prefixes: ['VITE_'] });
@@ -44,6 +70,10 @@ export default defineConfig(({ envMode }) => {
           semiUiDir,
           'dist/css/semi.css',
         ),
+        // Semi UI still depends on date-fns-tz v1, which expects date-fns v2 internals.
+        'date-fns': semiDateFnsDir,
+        // 统一 classic 内的 vrender 版本(见上方 vrenderAlias 注释)。
+        ...vrenderAlias,
       },
     },
     html: {

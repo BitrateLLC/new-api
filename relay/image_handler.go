@@ -42,7 +42,7 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 	if err != nil {
 		return types.NewError(err, types.ErrorCodeChannelModelMappedError, types.ErrOptionWithSkipRetry())
 	}
-	forceUpstreamStream := shouldForceUpstreamImageStream(info, request)
+	forceUpstreamStream := shouldForceUpstreamImageStream(c, info, request)
 	if forceUpstreamStream {
 		request.Stream = common.GetPointer(true)
 	}
@@ -200,15 +200,31 @@ func (w *imageResponseCaptureWriter) WriteString(s string) (int, error) {
 	return w.ResponseWriter.WriteString(s)
 }
 
+// ImageAsyncTaskSkipImagePersistKey 标记当前请求是异步图片任务的内部重放。
+// 异步任务（controller/image_task.go）自己负责落库与写生图日志，因此 ImageHelper
+// 内部的同步落库（persistSyncImageResponse）与流式聚合补日志（persistStreamToJSONImageLog）
+// 都应跳过，避免出现两条内容相同的生图日志。
+const ImageAsyncTaskSkipImagePersistKey = "image_async_task_skip_image_persist"
+
 func shouldPersistSyncImageResponse(c *gin.Context, info *relaycommon.RelayInfo) bool {
+	// 异步任务不应该在这里持久化（它们有自己的持久化逻辑）
+	if c != nil && c.GetBool("is_async_image_task") {
+		return false
+	}
 	return info != nil &&
 		(c == nil || !c.GetBool(chatImageCompatibilitySkipImagePersistKey)) &&
+		(c == nil || !c.GetBool(ImageAsyncTaskSkipImagePersistKey)) &&
 		!info.IsStream &&
 		(info.RelayMode == relayconstant.RelayModeImagesGenerations ||
 			info.RelayMode == relayconstant.RelayModeImagesEdits)
 }
 
-func shouldForceUpstreamImageStream(info *relaycommon.RelayInfo, request *dto.ImageRequest) bool {
+func shouldForceUpstreamImageStream(c *gin.Context, info *relaycommon.RelayInfo, request *dto.ImageRequest) bool {
+	// 异步任务永远不应该强制使用流式传输
+	// 因为 httptest.ResponseRecorder 无法正确处理流式响应
+	if c != nil && c.GetBool("is_async_image_task") {
+		return false
+	}
 	return info != nil &&
 		info.ChannelMeta != nil &&
 		request != nil &&
@@ -256,10 +272,14 @@ func persistSyncImageResponse(c *gin.Context, info *relaycommon.RelayInfo, reque
 		}
 		storedResp, err := service.PersistImageResponseToStorage(context.Background(), taskID, &imageResp)
 		if err != nil {
-			log.Status = model.TaskStatusFailure
-			log.Error = err.Error()
+			log.Error = fmt.Sprintf("image generated but storage failed: %s", err.Error())
 		} else {
-			log.SetImageURLs(imageURLsFromImageResponse(storedResp))
+			urls := imageURLsFromImageResponse(storedResp)
+			if len(urls) == 0 {
+				log.Error = "image storage did not produce public URL"
+			} else {
+				log.SetImageURLs(urls)
+			}
 		}
 		if createErr := model.CreateImageGenerationLog(log); createErr != nil {
 			logger.LogError(context.Background(), fmt.Sprintf("create sync image generation log failed: %s", createErr.Error()))
@@ -273,8 +293,8 @@ func imageURLsFromImageResponse(resp *dto.ImageResponse) []string {
 	}
 	urls := make([]string, 0, len(resp.Data))
 	for _, item := range resp.Data {
-		if strings.TrimSpace(item.Url) != "" {
-			urls = append(urls, item.Url)
+		if u := strings.TrimSpace(item.Url); strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://") {
+			urls = append(urls, u)
 		}
 	}
 	return urls

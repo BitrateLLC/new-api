@@ -265,6 +265,68 @@ const getImageDimensions = (file) =>
 const isBlobImageUrl = (value) =>
   typeof value === 'string' && value.startsWith('blob:');
 
+// 参考图统一经 canvas 解码主图并重新编码，得到“干净”的标准图片，规避上游严格识别报错：
+// - 源文件其实是 MPO（手机 3D/动态/景深照片，文件头是 JPEG、含 MPF 多帧段，
+//   官方会判为 mpo 并返回 "Unsupported image format: mpo"）；
+// - 扩展名/类型与真实内容不符（例如内容是 MPO 却命名为 .png）；
+// - 多余的 EXIF/多帧等上游不接受的数据。
+// 输出类型沿用原始 png/webp，其余统一转 jpeg；浏览器无法解码时退回原文件。
+const reencodeImageFile = (file, outType, ext) =>
+  new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = image.naturalWidth;
+        canvas.height = image.naturalHeight;
+        if (!canvas.width || !canvas.height) {
+          reject(new Error('Invalid image size'));
+          return;
+        }
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(image, 0, 0);
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              reject(new Error('Failed to encode image'));
+              return;
+            }
+            const baseName = file.name.replace(/\.[^.]+$/, '') || 'image';
+            resolve(new File([blob], `${baseName}.${ext}`, { type: outType }));
+          },
+          outType,
+          outType === 'image/jpeg' ? 0.95 : undefined,
+        );
+      } catch (err) {
+        reject(err);
+      }
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Failed to load image'));
+    };
+    image.src = objectUrl;
+  });
+
+const normalizeEditImageFile = async (file) => {
+  let outType = 'image/jpeg';
+  let ext = 'jpg';
+  if (file?.type === 'image/png') {
+    outType = 'image/png';
+    ext = 'png';
+  } else if (file?.type === 'image/webp') {
+    outType = 'image/webp';
+    ext = 'webp';
+  }
+  try {
+    return await reencodeImageFile(file, outType, ext);
+  } catch (err) {
+    return file; // 解码失败则退回原文件，交给后续校验/上游处理
+  }
+};
+
 const createMessageId = () =>
   `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -582,6 +644,13 @@ const toImageUrl = (item) => {
   if (item.b64_json) return `data:image/png;base64,${item.b64_json}`;
   return '';
 };
+
+// OpenAI 的 gpt-image 家族（gpt-image-1 / gpt-image-2 / gpt-image-1.5 等）固定返回
+// b64_json，不接受 response_format 参数，带上会被官方拒绝（Unknown parameter:
+// 'response_format'.）。dall-e 系列则支持，因此仅对 gpt-image 前缀剥离。
+const modelRejectsResponseFormat = (model) =>
+  typeof model === 'string' &&
+  model.trim().toLowerCase().startsWith('gpt-image');
 
 const isGeneratingStatus = (status) =>
   status === 'loading' ||
@@ -935,11 +1004,14 @@ const ImagePlayground = () => {
 
   const isImageEditMode = config.playgroundMode === 'image-to-image';
 
+  // gpt-image 系列不接受 response_format，转发给上游会被官方拒绝，这里直接不下发。
+  const dropResponseFormat = modelRejectsResponseFormat(config.model);
+
   const imageEditRequestPayload = useMemo(() => ({
     ...requestPayload,
-    response_format: 'b64_json',
+    ...(dropResponseFormat ? {} : { response_format: 'b64_json' }),
     output_format: requestPayload.output_format || 'png',
-  }), [requestPayload]);
+  }), [requestPayload, dropResponseFormat]);
 
   const requestPreviewPayload = useMemo(() => {
     if (!isImageEditMode) {
@@ -947,7 +1019,7 @@ const ImagePlayground = () => {
         ...requestPayload,
         async: true,
         stream: false,
-        response_format: 'b64_json',
+        ...(dropResponseFormat ? {} : { response_format: 'b64_json' }),
         endpoint: '/pg/images/generations',
       };
     }
@@ -963,7 +1035,7 @@ const ImagePlayground = () => {
         size: file.size,
       })),
     };
-  }, [imageEditRequestPayload, isImageEditMode, referenceImages, requestPayload]);
+  }, [imageEditRequestPayload, isImageEditMode, referenceImages, requestPayload, dropResponseFormat]);
 
   const updateConfig = useCallback((field, value) => {
     setConfig((prev) => ({
@@ -1054,10 +1126,17 @@ const ImagePlayground = () => {
       event.target.value = '';
       if (selectedFiles.length === 0) return;
 
+      // 上传前统一规整：把 MPO / 类型与内容不符 / 含多帧的图片重编码为干净标准图，
+      // 避免官方返回 "Unsupported image format: mpo" 之类的 400。
+      const normalizedSelected = [];
+      for (const original of selectedFiles) {
+        normalizedSelected.push(await normalizeEditImageFile(original));
+      }
+
       const dalle2 = isDalle2Model(config.model);
       const nextFiles = dalle2
-        ? selectedFiles.slice(0, 1)
-        : [...referenceImages, ...selectedFiles].slice(
+        ? normalizedSelected.slice(0, 1)
+        : [...referenceImages, ...normalizedSelected].slice(
             0,
             GPT_IMAGE_EDIT_MAX_FILES,
           );
@@ -1157,7 +1236,7 @@ const ImagePlayground = () => {
             ...requestPayload,
             async: true,
             stream: false,
-            response_format: 'b64_json',
+            ...(dropResponseFormat ? {} : { response_format: 'b64_json' }),
           };
 
       if (isImageEditMode) {
@@ -1167,7 +1246,9 @@ const ImagePlayground = () => {
         appendFormField(body, 'n', imageEditRequestPayload.n);
         appendFormField(body, 'size', imageEditRequestPayload.size);
         appendFormField(body, 'quality', imageEditRequestPayload.quality);
-        appendFormField(body, 'response_format', imageEditRequestPayload.response_format);
+        if (!dropResponseFormat) {
+          appendFormField(body, 'response_format', imageEditRequestPayload.response_format);
+        }
         appendFormField(body, 'background', imageEditRequestPayload.background);
         appendFormField(body, 'output_format', imageEditRequestPayload.output_format);
         appendFormField(body, 'output_compression', imageEditRequestPayload.output_compression);
@@ -1218,6 +1299,7 @@ const ImagePlayground = () => {
     referenceImages,
     requestPayload,
     requestPreviewPayload,
+    dropResponseFormat,
     pollImageTask,
     t,
     updateMessage,
