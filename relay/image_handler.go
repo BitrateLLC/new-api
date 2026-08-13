@@ -36,7 +36,7 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 	if err != nil {
 		return types.NewError(fmt.Errorf("failed to copy request to ImageRequest: %w", err), types.ErrorCodeInvalidRequest, types.ErrOptionWithSkipRetry())
 	}
-	c.Set("image_request_stream", request.IsStream(c))
+	c.Set("image_request_stream", request.IsStream(c.Request))
 
 	err = helper.ModelMappedHelper(c, info, request)
 	if err != nil {
